@@ -1,0 +1,9 @@
+[game]
+project_name="Doku2D Game"
+version=1.0
+icon="doku2d.png"
+assets_folder="assets"
+
+window_width= 640
+window_height=360
+

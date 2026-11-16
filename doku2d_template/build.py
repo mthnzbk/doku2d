@@ -1,0 +1,1 @@
+#nuitka ile derleme betiği.
