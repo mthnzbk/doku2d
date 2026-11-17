@@ -11,7 +11,6 @@ readme = "README.md"
 requires-python = ">=3.11"
 
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -32,7 +31,7 @@ authors = [
 dependencies = ["sfml>=3.0.2.0", "nuitka", "pymunk"]
 
 [tool.setuptools.packages.find]
-where = ["doku2d", "doku2d.*"]
+where = ["doku2d"]
 #where = ["src"] #src/kora2d/
 #py-modules = ["hesap"] ./hesap.py
 
@@ -51,8 +50,3 @@ doku2d = "doku2d.cli:main" # kora2d/cli.py main()
 #__main__.py  python -m kora2d
 #Framework görsel, font veya shader dosyaları içeriyorsa bu dosyaların dağıtım paketine
 # eklenmesini de ayarlamalısın. Yalnızca proje klasöründe bulunmaları her durumda yeterli değildir.
-
-#[project.urls]
-#Homepage = "https://api.arcade.academy"
-#Documentation = "https://api.arcade.academy/"
-#Examples = "https://api.arcade.academy/en/latest/examples/index.html"

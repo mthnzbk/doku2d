@@ -6,4 +6,10 @@ assets_folder="assets"
 
 window_width= 640
 window_height=360
+fps=60
 
+
+[build.windows]
+[build.linux]
+[build.mac]
+[build.android]

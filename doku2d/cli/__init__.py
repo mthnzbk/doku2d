@@ -15,23 +15,29 @@ def main():
 	args = parser.parse_args()
  
 	if len(sys.argv) == 1:
-    	parser.print_help()
-    	sys.exit()
+		parser.print_help()
+		sys.exit()
  
 	if args.command == "build":
 		build()
 
 	if args.command == "create":
 		create_project()
+
+	if args.command == "run":
+		run_project()
      
 	
 
 
 def create_project():
-    print("Proje oluşturuluyor.")
+	print("Proje oluşturuluyor.")
 
 def build():
-    print("Derleme işlemi başladı")
+	print("Derleme işlemi başladı")
     
-    
+def run_project():
+	print("Proje çalıştırıldı.")
+
+
 main()
