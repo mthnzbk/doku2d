@@ -90,7 +90,7 @@ class CanvasGroup(Entity):
         surface.display()
         self._shader.set_uniform('source',surface.texture);self._shader.set_uniform('tint',self.color)
         self._shader.set_uniform('opacity',self.opacity)
-        old_view=target.view;target.reset_GL_states();target.view=target.default_view
+        old_view=target.view;target.reset_GL_states();target.view=self.game._pixel_view(size)
         try:target.draw(Sprite(surface.texture),RenderStates(shader=self._shader))
         finally:target.view=old_view
 

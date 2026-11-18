@@ -166,6 +166,6 @@ class LightingRenderer:
         self._shader.set_uniform('lights', self._lights.texture if active else scene.texture)
         self._shader.set_uniform('has_lights', 1.0 if active else 0.0)
         self._shader.set_uniform('ambient',ambient)
-        old_view=target.view;target.reset_GL_states();target.view=target.default_view
+        old_view=target.view;target.reset_GL_states();target.view=self.game._pixel_view(target.size)
         try:target.draw(Sprite(scene.texture),RenderStates(shader=self._shader))
         finally:target.view=old_view

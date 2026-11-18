@@ -126,7 +126,9 @@ class Demo(Entity):
         water=self.input.is_action_pressed('paint_water')
         erase=self.input.is_action_pressed('erase_tile')
         if not (ground or water or erase):return False
-        point=self.game.window.map_pixel_to_coords(event.position,self.game.make_view(self.game.world))
+        point = self.game.window_to_world(event.position)
+        if point is None:
+            return False
         cell=self.world.world_to_map(point)
         if not 0<=cell[0]<70 or not 0<=cell[1]<24:return False
         for name in ('Ground','Water','Slopes'):self.world.layers[name].erase_cell(cell)

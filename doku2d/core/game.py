@@ -547,8 +547,13 @@ class Game:
         return sorted((obj for obj in self.objects if obj.visible and obj not in self._removing),
                       key=lambda obj:((obj.canvas or self.world).order,indices[obj.canvas or self.world],obj.z_index))
 
+    @staticmethod
+    def _pixel_view(size):
+        # SFML's default window view retains the dimensions from window creation.
+        return View(Rect((0, 0), size))
+
     def make_view(self, canvas):
-        view = View(Rect((0, 0), self.size))
+        view = self._pixel_view(self.size)
         camera = self.camera
         if not canvas.screen_space and camera is not None and camera.enabled:
             displacement = camera.screen_center - self.size / 2
@@ -568,10 +573,11 @@ class Game:
             else:obj.render(target,states)
 
     def render(self, target):
-        if tuple(target.size) == tuple(self.size):
+        output_size = target.size
+        if tuple(output_size) == tuple(self.size):
             self._render_content(target)
             return
-        x, y, w, h = self.content_rect(target.size)
+        x, y, w, h = self.content_rect(output_size)
         if not w or not h:
             return
         if self._surface is None or tuple(self._surface.size) != tuple(self.size):
@@ -586,7 +592,7 @@ class Game:
         sprite.scale = (w/self.size.x, h/self.size.y)
         original = target.view
         target.reset_GL_states()
-        target.view = target.default_view
+        target.view = self._pixel_view(output_size)
         try:
             target.clear(self.bar_color)
             target.draw(sprite)

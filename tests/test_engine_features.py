@@ -7,10 +7,10 @@ from unittest.mock import patch
 import os
 import subprocess
 
-from sfml.graphics import Color, Image, RectangleShape, RenderTexture, Texture
-from sfml.window import Event
+from sfml.graphics import Color, Image, RectangleShape, RenderTexture, RenderWindow, Texture
+from sfml.window import Event, VideoMode
 
-from doku2d import AmbientLight, Button, Camera, DirectionalLight, Entity, Game, Label, PointLight, Signal, Theme, TileMap, TileSet, VBox
+from doku2d import AmbientLight, Button, Camera, CanvasGroup, DirectionalLight, Entity, Game, Label, PointLight, Signal, Theme, TileMap, TileSet, VBox
 from doku2d.cli import build_project
 
 
@@ -82,6 +82,53 @@ class EngineFeatures(TestCase):
         actual = game.window_to_world(pixel)
         self.assertAlmostEqual(actual.x, point[0], places=4)
         self.assertAlmostEqual(actual.y, point[1], places=4)
+
+    def test_live_window_resize_keeps_world_hud_and_pointer_aligned(self):
+        game = Game(size=(160, 90))
+        self.addCleanup(game.close)
+        # SFML keeps this initial default view even after window.size changes.
+        window = RenderWindow(VideoMode(240, 200), 'Doku2D resize test')
+        self.addCleanup(window.close)
+        game._window = window
+
+        class Block(Entity):
+            def __init__(self, color, size):
+                super().__init__()
+                self.shape = RectangleShape(size)
+                self.shape.fill_color = color
+
+            def render(self, target, states):
+                target.draw(self.shape, states)
+
+        game.add(Block(Color.WHITE, (160, 90)))
+        game.add(AmbientLight(color=(80, 80, 80)))
+        group = game.add(CanvasGroup(canvas=game.ui.canvas))
+        marker = group.add(Block(Color.RED, (20, 20)))
+        marker.position = (125, 50)
+        button = group.add(Button(text='HUD'))
+        button.position = (10, 10)
+        button.size = (45, 26)
+
+        for size in ((320, 220), (160, 90), (320, 110)):
+            with self.subTest(size=size):
+                window.size = size
+                for _ in window.events:
+                    pass
+                window.clear(game.clear_color)
+                game.render(window)
+                pixels = Texture.create(*window.size)
+                pixels.update_from_window(window)
+                image = pixels.to_image()
+                window.display()
+                marker_pixel = tuple(map(round, game.screen_to_window((134, 58))))
+                world_pixel = tuple(map(round, game.screen_to_window((90, 45))))
+                self.assertEqual(image[marker_pixel], Color.RED)
+                self.assertEqual(image[world_pixel], Color(80, 80, 80))
+                if size != (160, 90):
+                    self.assertEqual(image[0, 0], Color.BLACK)
+                pointer = game.screen_to_window((30, 20))
+                game.handle_event(SimpleNamespace(type=Event.MOUSE_MOVED, position=pointer))
+                self.assertIs(game.ui.hover, button)
 
     def test_scaled_pointer_hits_ui_and_bars_do_not(self):
         game = Game(size=(100, 50), window_size=(200, 200))
