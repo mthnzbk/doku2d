@@ -1,113 +1,270 @@
-from typing import Any
-
+from math import cos, radians, acos, degrees, hypot, isfinite
+import pymunk
 from sfml.system import Vector2
-
-from .collision import CollisionObject
-from ..core import Node, Signal
-
+from ..core.signal import Signal
+from .physical import PhysicsBody
 
 
-class CharacterBody(Node):
-    collision_object: CollisionObject = CollisionObject()
-
-    _motion_mode:Any #Grounded, floating
-    _up_direction:Vector2 = Vector2(0,-1)
-    _slide_on_ceiling:bool = True
-
-    #floor
-    _stop_on_slope:bool = True
-    _constant_speed:bool = False
-    _block_on_wall:bool = True
-    _max_angle:float = 45.0 #derece
-    _snap_length:float = 1.0 #px
-
-    #moving platform
-    _on_leave:Any #add velocity, add upward velocity, do nothing
-    _floor_layers:int = 1 #1-32
-    _wall_layers:int = 1 #1-32
-
-    #collision
-    _safe_margin:float = 0.08 #px
-
-class RigidBody(Node):
-    body_entered = Signal()
-    body_exited = Signal()
-    body_shape_entered = Signal()
-    body_shape_exited = Signal()
-    sleeping_state_changed = Signal()
-
-    collision_object: CollisionObject = CollisionObject()
-
-    _mass:float = 1.0 #kg
-    #_physics_material:Any
-    _gravity_scale:float = 1.0
-
-    #mass distribution
-    _center_of_mass_mode:Any #auto, custom
-    _inertia:float = 0.0 #kg *px2
-
-    #deactivation
-    _sleeping:bool = False
-    _can_sleep:bool = True
-    _lock_rotation:bool = False
-    _freeze:bool = False
-    _freeze_mode:Any # static, Kinematic
-
-    #solver
-    _custom_integrator:bool = False
-    _continuous_cd:Any # disabled, cast ray, cast shape
-    _contact_monitor:bool = False
-
-    #linear
-    _linear_velocity:Vector2 = Vector2(0.0,0.0) #px/sn
-    _linear_damp_mode:Any # combine, replace
-    _linear_damp:float = 0.0
-
-    #angular
-    _angular_velocity:float = 0.0  #derece/sn
-    _angular_damp_mode:Any # combine, replace
-    _angular_damp:float = 0.0
-
-    #constant forces
-    _force:Vector2 #kg*px/sn
-    _torque:float = 0.0 #kg*px2/sn
+def dot(a,b):return a.x*b.x+a.y*b.y
 
 
-class StaticBody(Node):
-    #???
+def number(value,name,minimum=0,maximum=float('inf')):
+    if not isfinite(value) or not minimum<=value<=maximum:raise ValueError(f'{name} must be finite and in [{minimum},{maximum}]')
+    return float(value)
 
-    collision_object: CollisionObject = CollisionObject()
 
-class AnimatableBody(Node):
-    _sync2_physics:bool = True
+class CharacterBody(PhysicsBody):
+    """Velocity-driven motor; floating by default, grounded for platform games."""
+    _body_kind=pymunk.Body.DYNAMIC
+    _is_character=True
 
-    collision_object:CollisionObject = CollisionObject()
+    def __init__(self,name=None,*,motion_mode='floating',**options):
+        super().__init__(name,**options)
+        self._up_direction=Vector2(0,-1)
+        self._slide_on_ceiling=True
+        self._stop_on_slope=True
+        self._constant_speed=False
+        self._block_on_wall=True
+        self._max_angle=45.0
+        self._snap_length=4.0
+        self._on_leave='add_velocity'
+        self._floor_layers=0xffffffff
+        self._wall_layers=0
+        self._safe_margin=.08
+        self._lock_rotation=True
+        self._friction=0.0
+        self._floor_hit=None
+        self._carry=Vector2(0,0)
+        self._motion_start=self.position
+        self._real_velocity=Vector2(0,0)
+        self._last_velocity=Vector2(0,0)
+        self._motion_contacts=()
+        self._jump_requested=False
+        self._motor_active=False
+        self._motor_velocity=Vector2(0,0)
+        self.motion_mode=motion_mode
 
-class Area(Node):
-    area_entered = Signal()
-    area_exited = Signal()
-    area_shape_entered = Signal()
-    area_shape_exited = Signal()
-    body_entered = Signal()
-    body_exited = Signal()
-    body_shape_entered = Signal()
-    body_shape_exited = Signal()
+    @property
+    def motion_mode(self):return self._motion_mode
+    @motion_mode.setter
+    def motion_mode(self,value):
+        if value not in ('grounded','floating'):raise ValueError('motion_mode must be grounded or floating')
+        self._motion_mode=value
+        self.gravity_scale=1 if value=='grounded' else 0
+        self._floor_hit=None
+    @property
+    def up_direction(self):return Vector2(*self._up_direction)
+    @up_direction.setter
+    def up_direction(self,value):
+        value=self._vector(value);length=hypot(*value)
+        if not length:raise ValueError('Up direction cannot be zero')
+        self._up_direction=value/length
+    @property
+    def max_angle(self):return self._max_angle
+    @max_angle.setter
+    def max_angle(self,value):self._max_angle=number(value,'max_angle',0,89.9)
+    @property
+    def snap_length(self):return self._snap_length
+    @snap_length.setter
+    def snap_length(self,value):self._snap_length=number(value,'snap_length')
+    @property
+    def safe_margin(self):return self._safe_margin
+    @safe_margin.setter
+    def safe_margin(self,value):self._safe_margin=number(value,'safe_margin')
+    @property
+    def on_leave(self):return self._on_leave
+    @on_leave.setter
+    def on_leave(self,value):
+        if value not in ('add_velocity','add_upward_velocity','none'):raise ValueError('Unknown platform leave behavior')
+        self._on_leave=value
+    @property
+    def floor_layers(self):return self._floor_layers
+    @floor_layers.setter
+    def floor_layers(self,value):
+        if not isinstance(value,int) or not 0<=value<=0xffffffff:raise ValueError('floor_layers must be a 32-bit mask')
+        self._floor_layers=value
+    @property
+    def wall_layers(self):return self._wall_layers
+    @wall_layers.setter
+    def wall_layers(self,value):
+        if not isinstance(value,int) or not 0<=value<=0xffffffff:raise ValueError('wall_layers must be a 32-bit mask')
+        self._wall_layers=value
+    @property
+    def slide_on_ceiling(self):return self._slide_on_ceiling
+    @slide_on_ceiling.setter
+    def slide_on_ceiling(self,value):self._slide_on_ceiling=bool(value)
+    @property
+    def stop_on_slope(self):return self._stop_on_slope
+    @stop_on_slope.setter
+    def stop_on_slope(self,value):self._stop_on_slope=bool(value)
+    @property
+    def constant_speed(self):return self._constant_speed
+    @constant_speed.setter
+    def constant_speed(self,value):self._constant_speed=bool(value)
+    @property
+    def block_on_wall(self):return self._block_on_wall
+    @block_on_wall.setter
+    def block_on_wall(self,value):self._block_on_wall=bool(value)
 
-    collision_object: CollisionObject = CollisionObject()
+    def _floor(self,hit):return self.motion_mode=='grounded' and dot(hit.normal,self.up_direction)>=cos(radians(self.max_angle))-1e-7
+    def _ceiling(self,hit):return self.motion_mode=='grounded' and dot(hit.normal,self.up_direction)<=-cos(radians(self.max_angle))+1e-7
+    def is_on_floor(self):return self._floor_hit is not None and self._floor_hit.collider.game is self.game and self.game is not None
+    def is_on_ceiling(self):return any(self._ceiling(hit) for hit in self.contacts)
+    def is_on_wall(self):return any(not self._floor(hit) and not self._ceiling(hit) for hit in self.contacts)
+    def get_floor_normal(self):return Vector2(*self._floor_hit.normal) if self.is_on_floor() else Vector2(0,0)
+    def get_floor_angle(self):return degrees(acos(max(-1,min(1,dot(self.get_floor_normal(),self.up_direction))))) if self.is_on_floor() else 0.0
+    def get_platform_velocity(self):return self._platform(self._floor_hit) if self.is_on_floor() else Vector2(0,0)
+    def get_real_velocity(self):return Vector2(*self._real_velocity)
+    def get_slide_collision_count(self):return len(self.contacts)
+    def get_slide_collision(self,index):return self.contacts[index]
 
-    _monitoring:bool = True
-    _monitorable:bool = True
-    _priority:int = 0
+    def _platform(self,hit):
+        if hit is None or hit.collider.game is not self.game:return Vector2(0,0)
+        other=hit.collider
+        velocity=Vector2(*getattr(other,'_platform_velocity',other.linear_velocity))
+        angular=getattr(other,'_platform_angular_velocity',0)
+        radius=hit.point-other.position
+        return velocity+Vector2(-radius.y,radius.x)*angular
 
-    #gravity
-    _gravity_space_override: Any  # ""
+    def teleport(self,position):
+        self.position=position
+        self.velocity=(0,0)
+        self._last_velocity=Vector2(0,0)
+        self._floor_hit=None
+        self._contacts.clear()
+        self._jump_requested=False
 
-    #linear damp
-    _linear_damp_space_override:Any # ""
+    def jump(self,speed=360):
+        speed=number(speed,'Jump speed')
+        if not self.is_on_floor() or self._jump_requested:return False
+        velocity=self.velocity
+        self.velocity=velocity+self.up_direction*(speed-dot(velocity,self.up_direction))
+        self._jump_requested=True
+        return True
 
-    #angular damp
-    _angular_damp_space_override:Any # disabled, combine, combine-replace, replace, com-rep
+    def move_and_slide(self):
+        if self.game is None:raise RuntimeError('Add the character to a Game first')
+        self._motor_active=True
+        self._motor_velocity=self.velocity
+        return bool(self.contacts)
 
-    #audio bus
-    _audio_bus_override:bool = False
-    _audio_bus_name:Any #master,x ,y
+    def _prepare_motion(self,dt):
+        self._motion_start=self.position
+        self._carry=Vector2(0,0)
+        if self.is_on_floor() and self._floor_hit.collider.collision_layer&self.floor_layers:
+            self._carry=self._platform(self._floor_hit)
+        elif self.wall_layers:
+            for hit in self.contacts:
+                if not self._floor(hit) and not self._ceiling(hit) and hit.collider.collision_layer&self.wall_layers:
+                    self._carry=self._platform(hit);break
+        self._motion_contacts=self.contacts
+        # A jump supplied directly through velocity also suppresses floor snapping.
+        self._jump_requested=self._jump_requested or dot(self.velocity,self.up_direction)>max(1,dot(self._last_velocity,self.up_direction)+1)
+        self._native_body.velocity=tuple(self.velocity+self._carry)
+        self._project_motion(self._native_body)
+
+    def _project_motion(self,body):
+        velocity=Vector2(*body.velocity)
+        up=self.up_direction
+        hits=list(self._motion_contacts)
+        if self.is_on_floor() and self._floor_hit not in hits:hits.append(self._floor_hit)
+        for hit in hits:
+            other=hit.collider
+            if other.game is not self.game or other._is_area:continue
+            if other._body_kind==pymunk.Body.DYNAMIC and not other.freeze:continue
+            platform=self._platform(hit)
+            carry_layers=self.floor_layers if self._floor(hit) else self.wall_layers
+            if not other.collision_layer&carry_layers:
+                platform=hit.normal*dot(platform,hit.normal)
+            relative=velocity-platform
+            inward=dot(relative,hit.normal)
+            if self._floor(hit) and self._jump_requested:continue
+            if inward<0:
+                if self._ceiling(hit) and not self.slide_on_ceiling:
+                    relative=Vector2(0,0)
+                elif self.motion_mode=='grounded' and 0<dot(hit.normal,up)<cos(radians(self.max_angle))-1e-7 and self.block_on_wall and (self.is_on_floor() or dot(self._motor_velocity,up)<=1):
+                    relative=up*min(0,dot(relative,up))
+                else:relative-=hit.normal*inward
+            if self._floor(hit) and self._motor_active:
+                tangent=Vector2(-up.y,up.x)
+                requested=dot(self._motor_velocity,tangent)
+                if self.stop_on_slope and abs(requested)<.01 and not self._jump_requested:
+                    relative=Vector2(0,0)
+                elif self.constant_speed and abs(requested)>.01 and not self._jump_requested:
+                    slope=Vector2(hit.normal.y,-hit.normal.x)
+                    if dot(slope,tangent)<0:slope=-slope
+                    relative=slope*requested
+            velocity=relative+platform
+        body.velocity=tuple(velocity)
+
+    def apply_floor_snap(self):
+        if self.game is None or self.motion_mode!='grounded':return False
+        hit=self.game.physics.floor_probe(self,self.snap_length)
+        if hit is None:return False
+        if hit.distance>self.safe_margin:self.position-=self.up_direction*(hit.distance-self.safe_margin)
+        self._floor_hit=hit
+        return True
+
+    def _finish_motion(self,dt):
+        was_floor=self.is_on_floor()
+        self._native_body.velocity=tuple(Vector2(*self._native_body.velocity)-self._carry)
+        self._linear_velocity=Vector2(*self._native_body.velocity)
+        floors=[hit for hit in self.contacts if self._floor(hit)]
+        hit=max(floors,key=lambda hit:dot(hit.normal,self.up_direction),default=None)
+        if self.motion_mode=='grounded' and not self._jump_requested:
+            probe=self.game.physics.floor_probe(self,self.snap_length if was_floor else self.safe_margin+.5)
+            if probe is not None:
+                hit=probe
+                if was_floor and probe.distance>self.safe_margin:self.position-=self.up_direction*(probe.distance-self.safe_margin)
+        if self._jump_requested and dot(self.velocity,self.up_direction)>1:hit=None
+        self._floor_hit=hit
+        if was_floor and hit is None and self.on_leave!='none':
+            carry=self._carry
+            if self.on_leave=='add_upward_velocity' and dot(carry,self.up_direction)<0:carry-=self.up_direction*dot(carry,self.up_direction)
+            self.linear_velocity=self.velocity+carry
+        if hit is not None and not self._jump_requested:
+            velocity=self.velocity
+            inward=dot(velocity,hit.normal)
+            if inward<0:self.linear_velocity=velocity-hit.normal*inward
+        self._real_velocity=(self.position-self._motion_start)/dt
+        self._last_velocity=self.velocity
+        self._jump_requested=False
+        self._motor_active=False
+
+
+class RigidBody(PhysicsBody):
+    _body_kind=pymunk.Body.DYNAMIC
+
+
+class StaticBody(PhysicsBody):
+    _body_kind=pymunk.Body.STATIC
+
+
+class AnimatableBody(PhysicsBody):
+    _body_kind=pymunk.Body.KINEMATIC
+
+    def move_to(self,position):self.position=position
+
+
+class Area(PhysicsBody):
+    _body_kind=pymunk.Body.KINEMATIC
+    _is_area=True
+    area_entered=Signal()
+    area_exited=Signal()
+    def __init__(self,name=None,**options):
+        super().__init__(name,**options)
+        self._monitoring=True
+        self._monitorable=True
+    @property
+    def monitoring(self):return self._monitoring
+    @monitoring.setter
+    def monitoring(self,value):self._monitoring=bool(value)
+    @property
+    def monitorable(self):return self._monitorable
+    @monitorable.setter
+    def monitorable(self,value):self._monitorable=bool(value)
+    def get_overlapping_bodies(self):return tuple(other for other in self._overlaps if not other._is_area)
+    def get_overlapping_areas(self):return tuple(other for other in self._overlaps if other._is_area)
+
+
+__all__=['CharacterBody','RigidBody','StaticBody','AnimatableBody','Area']
