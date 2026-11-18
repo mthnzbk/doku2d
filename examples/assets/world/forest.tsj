@@ -1,0 +1,26 @@
+{
+  "type": "tileset",
+  "name": "Forest",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "columns": 4,
+  "tilecount": 16,
+  "image": "tiles.png",
+  "imagewidth": 128,
+  "imageheight": 128,
+  "tiles": [
+    {
+      "id": 4,
+      "animation": [
+        {
+          "tileid": 4,
+          "duration": 450
+        },
+        {
+          "tileid": 5,
+          "duration": 450
+        }
+      ]
+    }
+  ]
+}

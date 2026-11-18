@@ -1,0 +1,945 @@
+{
+  "type": "tileset",
+  "name": "PlatformTerrain",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "columns": 16,
+  "tilecount": 80,
+  "image": "terrain.png",
+  "imagewidth": 512,
+  "imageheight": 160,
+  "tiles": [
+    {
+      "id": 0,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "properties": [
+        {
+          "name": "solid",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "animation": [
+        {
+          "tileid": 16,
+          "duration": 220
+        },
+        {
+          "tileid": 32,
+          "duration": 220
+        },
+        {
+          "tileid": 48,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "animation": [
+        {
+          "tileid": 17,
+          "duration": 220
+        },
+        {
+          "tileid": 33,
+          "duration": 220
+        },
+        {
+          "tileid": 49,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "animation": [
+        {
+          "tileid": 18,
+          "duration": 220
+        },
+        {
+          "tileid": 34,
+          "duration": 220
+        },
+        {
+          "tileid": 50,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "animation": [
+        {
+          "tileid": 19,
+          "duration": 220
+        },
+        {
+          "tileid": 35,
+          "duration": 220
+        },
+        {
+          "tileid": 51,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "animation": [
+        {
+          "tileid": 20,
+          "duration": 220
+        },
+        {
+          "tileid": 36,
+          "duration": 220
+        },
+        {
+          "tileid": 52,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "animation": [
+        {
+          "tileid": 21,
+          "duration": 220
+        },
+        {
+          "tileid": 37,
+          "duration": 220
+        },
+        {
+          "tileid": 53,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "animation": [
+        {
+          "tileid": 22,
+          "duration": 220
+        },
+        {
+          "tileid": 38,
+          "duration": 220
+        },
+        {
+          "tileid": 54,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "animation": [
+        {
+          "tileid": 23,
+          "duration": 220
+        },
+        {
+          "tileid": 39,
+          "duration": 220
+        },
+        {
+          "tileid": 55,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "animation": [
+        {
+          "tileid": 24,
+          "duration": 220
+        },
+        {
+          "tileid": 40,
+          "duration": 220
+        },
+        {
+          "tileid": 56,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "animation": [
+        {
+          "tileid": 25,
+          "duration": 220
+        },
+        {
+          "tileid": 41,
+          "duration": 220
+        },
+        {
+          "tileid": 57,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "animation": [
+        {
+          "tileid": 26,
+          "duration": 220
+        },
+        {
+          "tileid": 42,
+          "duration": 220
+        },
+        {
+          "tileid": 58,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "animation": [
+        {
+          "tileid": 27,
+          "duration": 220
+        },
+        {
+          "tileid": 43,
+          "duration": 220
+        },
+        {
+          "tileid": 59,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "animation": [
+        {
+          "tileid": 28,
+          "duration": 220
+        },
+        {
+          "tileid": 44,
+          "duration": 220
+        },
+        {
+          "tileid": 60,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "animation": [
+        {
+          "tileid": 29,
+          "duration": 220
+        },
+        {
+          "tileid": 45,
+          "duration": 220
+        },
+        {
+          "tileid": 61,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "animation": [
+        {
+          "tileid": 30,
+          "duration": 220
+        },
+        {
+          "tileid": 46,
+          "duration": 220
+        },
+        {
+          "tileid": 62,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "animation": [
+        {
+          "tileid": 31,
+          "duration": 220
+        },
+        {
+          "tileid": 47,
+          "duration": 220
+        },
+        {
+          "tileid": 63,
+          "duration": 220
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "objectgroup": {
+        "type": "objectgroup",
+        "objects": [
+          {
+            "id": 1,
+            "x": 0,
+            "y": 0,
+            "polygon": [
+              {
+                "x": 0,
+                "y": 32
+              },
+              {
+                "x": 32,
+                "y": 0
+              },
+              {
+                "x": 32,
+                "y": 32
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 65,
+      "objectgroup": {
+        "type": "objectgroup",
+        "objects": [
+          {
+            "id": 1,
+            "x": 0,
+            "y": 0,
+            "polygon": [
+              {
+                "x": 0,
+                "y": 0
+              },
+              {
+                "x": 32,
+                "y": 32
+              },
+              {
+                "x": 0,
+                "y": 32
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "wangsets": [
+    {
+      "name": "Ground",
+      "type": "edge",
+      "colors": [
+        {
+          "name": "Soil",
+          "color": "#4ca97c",
+          "tile": 0,
+          "probability": 1
+        }
+      ],
+      "wangtiles": [
+        {
+          "tileid": 0,
+          "wangid": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 1,
+          "wangid": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 2,
+          "wangid": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 3,
+          "wangid": [
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 4,
+          "wangid": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 5,
+          "wangid": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 6,
+          "wangid": [
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 7,
+          "wangid": [
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 8,
+          "wangid": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 9,
+          "wangid": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 10,
+          "wangid": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 11,
+          "wangid": [
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 12,
+          "wangid": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 13,
+          "wangid": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 14,
+          "wangid": [
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 15,
+          "wangid": [
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Water",
+      "type": "edge",
+      "colors": [
+        {
+          "name": "Blue",
+          "color": "#4ca97c",
+          "tile": 16,
+          "probability": 1
+        }
+      ],
+      "wangtiles": [
+        {
+          "tileid": 16,
+          "wangid": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 17,
+          "wangid": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 18,
+          "wangid": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 19,
+          "wangid": [
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 20,
+          "wangid": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 21,
+          "wangid": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 22,
+          "wangid": [
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 23,
+          "wangid": [
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "tileid": 24,
+          "wangid": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 25,
+          "wangid": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 26,
+          "wangid": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 27,
+          "wangid": [
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 28,
+          "wangid": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 29,
+          "wangid": [
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 30,
+          "wangid": [
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "tileid": 31,
+          "wangid": [
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}
