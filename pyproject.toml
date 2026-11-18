@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,46 +7,26 @@ name = "doku2d"
 version = "0.1.0"
 description = "Python için kod odaklı 2D oyun framework'ü"
 readme = "README.md"
-#license = "LICENSE"
 requires-python = ">=3.11"
-
+license = {file = "LICENSE"}
+authors = [{name = "Metehan Özbek"}]
+dependencies = ["sfml>=3.0.2.0", "pymunk>=7.0"]
 classifiers = [
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
-    "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-authors = [
-    { name = "Metehan Özbek" }
-]
-
-dependencies = ["sfml>=3.0.2.0", "nuitka", "pymunk"]
-
-[tool.setuptools.packages.find]
-where = ["doku2d"]
-#where = ["src"] #src/kora2d/
-#py-modules = ["hesap"] ./hesap.py
+[project.optional-dependencies]
+build = ["nuitka>=2.6"]
 
 [project.scripts]
-doku2d = "doku2d.cli:main" # kora2d/cli.py main()
+doku2d = "doku2d.cli:main"
 
- #10. Dağıtılabilir dosya oluştur
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["doku2d", "doku2d.*"]
 
-#Proje klasöründe:
-#python -m pip install build
-#python -m build
-#Sonuçlar dist klasörüne gelir:
-#dist/
-#├── kora2d-0.1.0-py3-none-any.whl
-#└── kora2d-0.1.0.tar.gz
-#__main__.py  python -m kora2d
-#Framework görsel, font veya shader dosyaları içeriyorsa bu dosyaların dağıtım paketine
-# eklenmesini de ayarlamalısın. Yalnızca proje klasöründe bulunmaları her durumda yeterli değildir.
+[tool.setuptools.package-data]
+doku2d = ["assets/LICENSE", "assets/fonts/*", "cli/template/*", "cli/template/.gitignore", "cli/template/assets/*"]

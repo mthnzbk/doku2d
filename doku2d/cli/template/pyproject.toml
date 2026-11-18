@@ -1,15 +1,5 @@
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "doku2d"
+name = "__APP_ID__"
 version = "0.1.0"
-description = "Python için kod odaklı 2D oyun framework'ü"
-
-
-authors = [
-    { name = "Metehan Özbek" }
-]
-
-dependencies = ["sfml>=3.0.2.0", "nuitka", "pymunk"]
+requires-python = ">=3.11"
+dependencies = ["doku2d>=0.1.0"]

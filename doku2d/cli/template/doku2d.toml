@@ -1,0 +1,16 @@
+[game]
+name = __PROJECT_TITLE__
+app_id = "__APP_ID__"
+entry = "main.py"
+
+[window]
+width = 960
+height = 640
+fps_limit = 60
+physics_fps = 60
+
+[assets]
+directory = "assets"
+
+[build]
+directory = "dist"
