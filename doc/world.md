@@ -147,7 +147,7 @@ kırpılarak harita dışına taşması engellenir. Ekran uzayındaki Canvas etk
 ```python
 from doku2d import AudioPlayer, PositionalAudio, AudioListener
 
-music = game.add(AudioPlayer("music.ogg", stream=True, loop=True,
+music = game.add(AudioPlayer("music.ogg", bus="Music", stream=True, loop=True,
                             autoplay=True, volume=40))
 click = game.add(AudioPlayer("click.wav", max_polyphony=4))
 click.play()
@@ -196,3 +196,78 @@ ayarlanan hoparlör düzenine göre duyulur.
 
 Proje kaynak kökü ve paylaşılan önbellek için `game.resources.load_map(path)` veya
 `TileMap.from_tiled(path, resources=game.resources)` kullanılabilir.
+## Ses grupları
+
+```python
+game.audio['Master'].volume = 80
+game.audio['Music'].volume = 55
+game.audio['SFX'].muted = True
+
+game.audio.add_bus('Ambience', volume=70)
+water.bus = 'Ambience'
+```
+
+Her oyun kendi `Master`, `Music` ve `SFX` gruplarını oluşturur. Oyuncular
+varsayılan olarak `SFX` grubuna bağlıdır. Kendi ses seviyeleri master ve grup
+seviyeleriyle çarpılır. `PositionalAudio` buna uzaklık etkisini de uygular.
+Grup seviyeleri ve mute, çalmakta olan seslere yansır. Mute oynatmayı durdurmaz.
+
+## TileMap üzerinde yol bulma
+
+```python
+# Hücre koordinatlarıyla
+cells = tilemap.find_path((2, 3), (18, 11))
+
+# NPC ve hedefin dünya koordinatlarıyla
+waypoints = tilemap.find_world_path(npc.position, target.position, diagonal=True)
+```
+
+Yol başlangıç ve hedefi içerir. Ulaşılamayan hedef için `[]` döner.
+`find_world_path` hücre merkezlerini dünya koordinatlarıyla verir. NPC bu
+noktaları sırayla takip edebilir. Çapraz hareket kapalı köşeleri kesmez.
+
+Varsayılan olarak `TileSet.set_solid` ile işaretlenen karolar, Tiled karo
+çarpışmaları ve çarpışması etkin nesne katmanları hesaba katılır. Nesne
+şekillerinin kapladığı dikdörtgen engel sayılır. Özel bir duvar katmanın varsa
+`blocked_layers='Walls'` ile o katmandaki dolu hücreleri engel olarak kullan.
+`blocked=[(8, 5)]` geçici bir engel ekler. Karo düzenlemeleri sonraki sorguya
+yansır. Sonlu Tiled haritalarında arama harita sınırlarında kalır. Elle yapılmış
+veya sonsuz haritada gerekirse `bounds=(x, y, genişlik, yükseklik)` ile hücre
+cinsinden arama alanını belirt.
+
+## NPC'nin yolu izlemesi
+
+```python
+from doku2d import CharacterBody
+
+npc = game.add(CharacterBody(position=(40, 68), radius=5))
+follower = npc.navigate_to(tilemap, hedef.position, speed=90)
+follower.arrived.connect(on_arrival)
+```
+
+Gövde ve TileMap aynı oyuna eklenir. Hedefe bir dünya konumu veya doğrudan bir
+`Entity` verebilirsin. Entity hedefi hareket ederse takipçi, varışa kadar rotayı
+yeniler. Kendi hareket kodunu yazmak gerekmez. Takipçi fizik adımında gövdeyi
+hareket ettirir ve hedefte durur.
+
+Karo değişiklikleri sonraki rota kontrolüne yansır. Yol bulunamazsa takipçi
+bekler ve tekrar dener. `path_failed` bu bekleme başladığında haber verir.
+`follower.path` kalan noktaları, `follower.stop()` iptal işlemini, `follower.target`
+ise yeni hedef atamayı sağlar. Varsayılan rota kontrol aralığı 0,25 saniyedir.
+
+`navigate_to`, `find_path` ile aynı `diagonal`, `blocked_layers`, `bounds`
+seçeneklerini alır. Takipçi üstten görünüşte kullanılan `floating` gövdeler
+içindir. Gövdenin çarpışma şeklinden yarıçap çıkarır ve dar geçitleri eler.
+Kutu ve çokgenlerde şekli çevreleyen çember kullanılır. İstersen
+`navigate_to(tilemap, hedef, radius=6)` ile dünya birimi cinsinden açık bir
+değer verebilirsin.
+
+Takipçi aynı dünyadaki hareketli ve sabit gövdeleri çarpışma filtrelerine göre
+hesaba katar. Sensörler engel değildir. Fizik gövdesi hedefse NPC yanına kadar
+gider ve durur. `avoid_bodies=False` canlı fizik engellerini rota hesabından
+çıkarır. Bir `blocked` işlevi vererek oyun kurallarına göre ek engel hücreleri
+katabilirsin. Birden fazla NPC arasında geçiş önceliği ayrılmaz.
+
+Doğrudan yol sorgusunda `tilemap.find_path(baslangic, hedef, agent=npc)` aynı
+boyut ve çarpışma hesabını kullanır. Oyun dışında harita verisini sorgularken
+`radius=6` ile geçit genişliğini kontrol edebilirsin.

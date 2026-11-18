@@ -88,6 +88,7 @@ class TileCollisions:
             body.visible=False
             body.tile_layer=layer.name
             body.tile_cell=cell
+            body._tilemap_owner = self.tilemap
             result.append(body)
         return result
 

@@ -1,4 +1,5 @@
 """Editable, chunk-cached orthogonal tile maps with independent drawing layers."""
+from contextlib import nullcontext
 from math import floor, ceil, isfinite
 from pathlib import Path
 from types import MappingProxyType
@@ -476,6 +477,7 @@ class TileLayer(Entity):
             keys = ((cx,cy) for cy in rows for cx in columns if (cx,cy) in self._chunks)
         tilesets = owner.tilesets
         frame_cache = {}
+        debug = self.game.debug if self.game and self.game.debug.visible else None
         for key in sorted(keys, key=lambda key: -key[0] if reverse_x else key[0]):
             mesh = self._meshes.get(key)
             if mesh is not None:
@@ -487,6 +489,9 @@ class TileLayer(Entity):
                         mesh = None
                         break
             mesh_rows = self._build_chunk(key) if mesh is None else mesh[0]
+            if debug is not None and any(y0 <= y <= y1 for y in mesh_rows):
+                debug._tile_chunk(self.canvas or self.game.world, transform,
+                                  (key[0]*cw*tw, key[1]*ch*th, cw*tw, ch*th))
             for y, runs in mesh_rows.items():
                 if y0 <= y <= y1:
                     rows_in_view.setdefault(y, []).extend(runs)
@@ -675,6 +680,42 @@ class TileMap(Entity):
         return floor(x/self._tile_size[0]),floor(y/self._tile_size[1])
     def map_to_world(self,point): return self.transform.transform_point(self.map_to_local(point))
     def world_to_map(self,point): return self.local_to_map(self.transform.inverse.transform_point(Entity._vector(point)))
+
+    def find_path(self, start, goal, *, diagonal=False, blocked_layers=None, bounds=None, blocked=(),
+                  radius=None, agent=None, avoid_bodies=None, ignore=()):
+        """Return a path of cells including both endpoints, or [] if unreachable.
+
+        Authored solid tiles and collision objects are obstacles by default.
+        Supply blocked_layers to use only those layers (all occupied cells block).
+        bounds is an optional (x, y, width, height) rectangle in cells.
+        radius is in world units. An agent supplies its radius and collision filters.
+        """
+        from .tilenavigation import find_path
+
+        if bounds is not None:
+            x, y, width, height = bounds
+            bounds = (*coordinates((x, y)), *dimensions((width, height)))
+        if agent is not None and not getattr(agent, '_is_physics_body', False):
+            raise TypeError('Navigation agent must be a physics body')
+        if radius is None:
+            radius = agent._navigation_radius() if agent is not None else 0
+        if not isfinite(radius) or radius < 0:
+            raise ValueError('Navigation radius must be nonnegative and finite')
+        check_bodies = agent is not None if avoid_bodies is None else bool(avoid_bodies)
+        if check_bodies and agent is not None and agent.game is not self.game:
+            raise ValueError('The agent and tile map must belong to the same Game')
+        physics = self.game._physics if check_bodies and self.game is not None else None
+        profile = self.game.debug._measure('navigation') if self.game is not None else nullcontext()
+        with profile:
+            return find_path(self, coordinates(start), coordinates(goal), diagonal=diagonal,
+                             blocked_layers=blocked_layers, bounds=bounds,
+                             blocked=(coordinates(point) for point in blocked), radius=radius,
+                             physics=physics, agent=agent, ignored=tuple(ignore))
+
+    def find_world_path(self, start, goal, **options):
+        """Return the world-space center of each cell on the path."""
+        path = self.find_path(self.world_to_map(start), self.world_to_map(goal), **options)
+        return [self.map_to_world(cell) for cell in path]
 
     @property
     def bounds(self):

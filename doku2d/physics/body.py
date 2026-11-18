@@ -3,6 +3,7 @@ import pymunk
 from sfml.system import Vector2
 from ..core.signal import Signal
 from .physical import PhysicsBody
+from .pathfollower import PathFollower
 
 
 def dot(a,b):return a.x*b.x+a.y*b.y
@@ -42,7 +43,20 @@ class CharacterBody(PhysicsBody):
         self._jump_requested=False
         self._motor_active=False
         self._motor_velocity=Vector2(0,0)
+        self._navigation = None
         self.motion_mode=motion_mode
+
+    @property
+    def navigation(self):
+        return self._navigation
+
+    def navigate_to(self, tilemap, target, **options):
+        """Follow a TileMap route to a world point or an Entity. Return the follower."""
+        follower = PathFollower(self, tilemap, target, **options)
+        if self.navigation is not None:
+            self.navigation.stop()
+        self._navigation = follower
+        return follower
 
     @property
     def motion_mode(self):return self._motion_mode

@@ -161,11 +161,18 @@ class PhysicsWorld:
                     driven.append((entity,Vector2(*body.velocity),body.angular_velocity))
                     entity._platform_velocity=delta/dt
                     entity._platform_angular_velocity=angle/dt
-                    body.position=tuple(entity._last_step_position)
-                    body.angle=entity._last_step_rotation
-                    body.velocity=tuple(delta/dt)
-                    body.angular_velocity=angle/dt
-                    self.reindex(entity)
+        # Navigation queries see the new position of a moved obstacle before
+        # the solver rewinds it to simulate movement over the fixed step.
+        for entity in characters:
+            if entity.navigation is not None:
+                entity.navigation._step(dt)
+        for entity, _, _ in driven:
+            body = entity._native_body
+            body.position = tuple(entity._last_step_position)
+            body.angle = entity._last_step_rotation
+            body.velocity = tuple(entity._platform_velocity)
+            body.angular_velocity = entity._platform_angular_velocity
+            self.reindex(entity)
         for entity in characters:entity._prepare_motion(dt)
         smallest=min((min(entity._native_shape.bb.right-entity._native_shape.bb.left,
                           entity._native_shape.bb.top-entity._native_shape.bb.bottom)
@@ -257,3 +264,18 @@ class PhysicsWorld:
             if entity is not None and entity not in exclude and (areas or not entity._is_area):
                 return Collision(entity,Vector2(*hit.normal),Vector2(*hit.point),hit.alpha)
         return None
+
+    def _navigation_clear(self, start, end, radius, *, agent, ignored, tilemap):
+        mask = self._filter(agent) if agent is not None else pymunk.ShapeFilter()
+        start, end = tuple(start), tuple(end)
+        if start == end:
+            hits = self._space.point_query(start, radius, mask)
+        else:
+            hits = self._space.segment_query(start, end, radius, mask)
+        for hit in hits:
+            entity = self._shapes.get(hit.shape)
+            if (entity is not None and entity is not agent and entity not in ignored
+                    and entity not in self.game._removing and not hit.shape.sensor
+                    and getattr(entity, '_tilemap_owner', None) is not tilemap):
+                return False
+        return True

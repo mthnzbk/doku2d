@@ -1,4 +1,4 @@
-from math import radians, degrees, isfinite
+from math import radians, degrees, hypot, isfinite
 import pymunk
 from sfml.graphics import Color, CircleShape, RectangleShape, ConvexShape, RenderStates, Transform
 from sfml.system import Vector2
@@ -104,6 +104,17 @@ class PhysicsBody(Entity):
         self._shape = value
         if self._native_body is not None:
             self.game.physics.rebuild(self)
+
+    def _navigation_radius(self):
+        shape = self.shape
+        sx, sy = self.scale
+        if isinstance(shape, Circle):
+            return shape.radius * sx
+        if isinstance(shape, Box):
+            return hypot(shape.size[0] * sx, shape.size[1] * sy) / 2
+        if isinstance(shape, Segment):
+            return max(hypot(x*sx, y*sy) for x, y in (shape.start, shape.end)) + shape.radius * min(sx, sy)
+        return max(hypot(x*sx, y*sy) for x, y in shape.vertices)
 
     @property
     def mass(self):
