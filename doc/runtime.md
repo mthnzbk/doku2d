@@ -197,3 +197,64 @@ kullanılır. Dünya dönüşümlerine isteğe bağlı `canvas` verilebilir.
 TileMap görünür parçaların çizim verisini saklar. Animasyon karesi değiştiğinde
 ilgili görünür parçalar yenilenir. Yalnızca ortam rengi kullanılan Canvas, ışık
 biriktirme yüzeyine ihtiyaç duymaz.
+
+## Motorun debug katmanı
+
+```python
+from doku2d import Game, Key
+
+game = Game(debug=True)                 # F3 ile aç/kapat
+game.debug.key = Key.F8                 # F3 artık oyuna ait
+game.debug.show_collisions = False      # İsteğe bağlı görünüm seçenekleri
+```
+
+Debug varsayılan olarak kapalıdır. Açıldığında katman FPS, kare aralığı,
+nesne sayısı ve çizilen TileMap parça sayısını gösterir. Fizik şekillerini,
+kamera sınırlarını ve çizilen karo parçalarını da işaretler. `show_stats`,
+`show_collisions`, `show_camera` ve `show_chunks` ayrı ayrı değiştirilebilir.
+
+F3 ayrıca son çizilen karedeki fizik, oyun güncellemesi, çizim ve A* sürelerini
+milisaniye olarak gösterir. Bunlar CPU süreleridir. A* fizik veya güncelleme
+içinden çağrıldığında kendi satırında sayılır. Yanındaki sayı o karedeki yol
+sorgusu sayısıdır. Koddan `game.debug.profile_ms` ve `game.debug.path_queries`
+ile okunabilir. `game.debug.show_profile = False` süre toplamayı da kapatır.
+
+Yerleşik kısayolu `game.debug.key = None` ile kapatıp kendi olay kodundan
+`game.debug.toggle()` çağırabilirsin. Bu çağrı da debug modu kapalıyken katmanı
+açmaz. Proje dosyasından etkinleştirmek için:
+
+```toml
+[debug]
+enabled = true
+key = "F8"  # Atlanırsa F3; false verilirse yerleşik kısayol yok.
+```
+
+## Oyuncu ayarlarını saklama
+
+```python
+from doku2d import Game, JoyButton, Key
+
+game = Game(persist_preferences=True)
+game.input.bind('interact', Key.E)                       # Oyun varsayılanı
+game.input.set_bindings('interact', Key.F, JoyButton(2)) # Oyuncu seçimi
+game.input.joy_deadzone = 0.25
+game.audio['Music'].volume = 60
+game.audio['SFX'].muted = True
+```
+
+`get_bindings(action)` arayüzde göstermek için etkin atamaları verir.
+`set_bindings(action)` atamayı boş bırakır. Oyuncu seçimi sonraki açılışta,
+oyun aynı eyleme `bind` ile varsayılan tuşunu verse de korunur. `JoyAxis` için
+ayrı bir `deadzone` verirsen o bağlantı kendi değerini kullanır.
+
+Tercihler normal kapanışta diğer `game.settings` değerleriyle birlikte yazılır.
+Bir ayar menüsündeki Uygula düğmesinden hemen kaydetmek için
+`game.settings.save()` çağırabilirsin. Özel ses gruplarının seviyeleri de sonraki
+açılışta aynı adla `add_bus` çağırınca uygulanır.
+
+`Game.from_project()` kullanıyorsan proje dosyasından da etkinleştirebilirsin:
+
+```toml
+[preferences]
+persist = true
+```

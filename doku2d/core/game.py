@@ -13,7 +13,8 @@ from .storage import SaveStore, Settings
 from .scope import EntityScope
 from .signal import Signal
 from .singleton import Services, instantiate
-from .input import Input
+from .input import Input, Key
+from .debug import DebugOverlay
 
 
 class Game:
@@ -26,7 +27,8 @@ class Game:
     def __init__(self, title="Doku2D", size=(960, 540), *, fps_limit=60,
                  physics_fps=60, services=None, project_root=None, asset_root=None,
                  save_dir=None, app_id=None, window_size=None, scale_mode="fit",
-                 bar_color=Color.BLACK, theme=None, persist_preferences=False):
+                 bar_color=Color.BLACK, theme=None, debug=False, debug_key=Key.F3,
+                 persist_preferences=False):
         self._window = None
         self._closed = False
         self._running = True
@@ -49,6 +51,7 @@ class Game:
         self._audio = None
         self._ui = None
         self._input = Input()
+        self._debug = DebugOverlay(self, enabled=debug, key=debug_key)
         self._physics = None
         self._lighting = None
         self._world = Canvas()
@@ -260,6 +263,10 @@ class Game:
             else:
                 self._audio = AudioMixer(self)
         return self._audio
+
+    @property
+    def debug(self):
+        return self._debug
 
     @property
     def physics(self):
@@ -531,40 +538,53 @@ class Game:
         if self._ui:
             self._ui.arrange()
         self.input.set_gui_captured(self._ui is not None and self._ui.keyboard_captured)
+        if self.debug.enabled:
+            self.debug._sample(dt)
         dt = min(dt,0.25)
         step = 1/self.physics_fps
         self._accumulator += dt
         try:
-            for _ in range(int((self._accumulator+step*1e-9)/step)):
-                if not self.running:
-                    break
-                self.input._begin_physics()
-                try:
-                    self._process("physics_update",step,self.physics_updated)
-                    for obj in self.objects:
-                        if hasattr(obj,"_sync_collisions"):obj._sync_collisions()
-                    self.flush_deferred()
-                    if self._physics is not None and not self.paused:
-                        self._dispatching += 1
-                        try:
-                            self.physics.step(step)
-                        finally:
-                            self._dispatching -= 1
-                        self.flush_deferred()
-                finally:
-                    self.input._end_physics()
-                self._accumulator = max(0,self._accumulator-step)
+            steps = int((self._accumulator+step*1e-9)/step)
+            if steps:
+                with self.debug._measure('physics'):
+                    for _ in range(steps):
+                        if not self.running:
+                            break
+                        self._fixed_update(step)
+                        self._accumulator = max(0, self._accumulator-step)
             if self.running:
-                self._process("update",dt,self.updated)
-                # Resolve followers after gameplay, independently of registration order.
-                for obj in self.objects:
-                    if hasattr(obj,"_camera_update") and obj.can_process(): obj._camera_update(dt)
-                for obj in self.objects:
-                    if hasattr(obj,"_listener_update") and obj.can_process(): obj._listener_update()
-                for obj in self.objects:
-                    if getattr(obj,"_is_audio_player",False): obj._audio_update(suspended=not obj.can_process())
+                with self.debug._measure('update'):
+                    self._process("update", dt, self.updated)
+                    # Resolve followers after gameplay, independently of registration order.
+                    for obj in self.objects:
+                        if hasattr(obj, "_camera_update") and obj.can_process():
+                            obj._camera_update(dt)
+                    for obj in self.objects:
+                        if hasattr(obj, "_listener_update") and obj.can_process():
+                            obj._listener_update()
+                    for obj in self.objects:
+                        if getattr(obj, "_is_audio_player", False):
+                            obj._audio_update(suspended=not obj.can_process())
         finally:
             self.input._end_frame()
+
+    def _fixed_update(self, step):
+        self.input._begin_physics()
+        try:
+            self._process("physics_update", step, self.physics_updated)
+            for obj in self.objects:
+                if hasattr(obj, "_sync_collisions"):
+                    obj._sync_collisions()
+            self.flush_deferred()
+            if self._physics is not None and not self.paused:
+                self._dispatching += 1
+                try:
+                    self.physics.step(step)
+                finally:
+                    self._dispatching -= 1
+                self.flush_deferred()
+        finally:
+            self.input._end_physics()
 
     def draw_list(self):
         # A Canvas is one composited surface; equal orders keep registration order.
@@ -599,6 +619,11 @@ class Game:
             else:obj.render(target,states)
 
     def render(self, target):
+        with self.debug._measure('render'):
+            self._render_frame(target)
+        self.debug._publish_profile()
+
+    def _render_frame(self, target):
         output_size = target.size
         if tuple(output_size) == tuple(self.size):
             self._render_content(target)
@@ -632,7 +657,10 @@ class Game:
         try:
             if self._ui:self._ui.arrange()
             groups={}
-            for obj in self.draw_list():
+            visible = self.draw_list()
+            if self.debug.visible:
+                self.debug._begin_frame()
+            for obj in visible:
                 if obj._canvas_group is None:groups.setdefault(obj.canvas or self.world,[]).append(obj)
             for canvas,objects in groups.items():
                 tint=canvas.ambient
@@ -645,6 +673,8 @@ class Game:
                     self._lighting.render(target,canvas,objects,self._draw_canvas_objects)
                 else:self._draw_canvas_objects(target,objects,canvas)
             if self._ui:self._ui.draw_popup(target)
+            if self.debug.visible:
+                self.debug._draw(target, len(visible))
         finally:
             target.view=original_view
             self._dispatching-=1
@@ -653,6 +683,10 @@ class Game:
     def handle_event(self, event):
         self._dispatching += 1
         try:
+            if self.debug._event(event):
+                if event.type == Event.KEY_RELEASED:
+                    self.input.handle_event(event, consumed=True)
+                return True
             consumed = self._ui is not None and self._ui.handle_event(event)
             self.input.set_gui_captured(self._ui is not None and self._ui.keyboard_captured)
             self.input.handle_event(event,consumed=consumed)
