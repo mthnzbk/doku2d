@@ -1,0 +1,19 @@
+[game]
+name = "Doku2D | Starter"
+app_id = "starter-project"
+entry = "main.py"
+
+[window]
+width = 960
+height = 640
+fps_limit = 60
+physics_fps = 60
+
+[assets]
+directory = "assets"
+
+[build]
+directory = "dist"
+
+[storage]
+directory = ".user-data"
