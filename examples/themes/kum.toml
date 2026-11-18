@@ -1,0 +1,14 @@
+[theme]
+background = [235, 221, 198]
+surface = [255, 246, 229]
+hover = [250, 229, 201]
+active = [241, 207, 171]
+accent = [173, 65, 42]
+text = [58, 40, 31]
+muted = [113, 76, 59]
+border = [185, 146, 116]
+disabled = [219, 199, 178]
+selection = [236, 185, 157]
+font_size = 17
+radius = 4
+padding = 14
