@@ -1,12 +1,18 @@
+"""The supported public Doku2D API."""
 from sfml.graphics import Color
-""", Shader, Font, Texture
-from sfml.audio import Music
-from sfml.system import Vector2, Clock
-from sfml.window import Window"""
-
-from doku2d.gui import *
-from doku2d.rendering import *
-from doku2d.core import *
-from doku2d.physics import *
-from doku2d.audio import *
-from doku2d.animation import *
+from sfml.system import Vector2
+from .config import ProjectConfig
+__version__="0.1.0"
+from .gui import *
+from .rendering import *
+from .core import *
+from .physics import *
+from .audio import *
+from .animation import *
+from .gui import __all__ as _gui
+from .rendering import __all__ as _rendering
+from .core import __all__ as _core
+from .physics import __all__ as _physics
+from .audio import __all__ as _audio
+from .animation import __all__ as _animation
+__all__=list(dict.fromkeys(['Color','Vector2','ProjectConfig']+_core+_gui+_rendering+_physics+_audio+_animation))
