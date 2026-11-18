@@ -21,6 +21,7 @@ class ProjectConfig:
     window_size:tuple[int,int]|None=None
     scale_mode:str="fit"
     theme:Path|None=None
+    persist_preferences:bool=False
     @property
     def root(self):return self.file.parent
     @property
@@ -28,7 +29,8 @@ class ProjectConfig:
         return dict(title=self.title,size=(self.width,self.height),fps_limit=self.fps_limit,
                     physics_fps=self.physics_fps,project_root=self.root,asset_root=self.assets,
                     save_dir=self.save_dir,app_id=self.app_id,window_size=self.window_size,
-                    scale_mode=self.scale_mode,theme=self.theme)
+                    scale_mode=self.scale_mode,theme=self.theme,
+                    persist_preferences=self.persist_preferences)
     @classmethod
     def load(cls,path='doku2d.toml'):
         path=Path(path).resolve()
@@ -57,6 +59,9 @@ class ProjectConfig:
             return value
         storage=data.get('storage',{}).get('directory')
         theme=data.get('ui',{}).get('theme')
+        persist_preferences=data.get('preferences',{}).get('persist',False)
+        if not isinstance(persist_preferences,bool):
+            raise ValueError('preferences.persist must be boolean')
         logical_width=integer(window.get('width',game.get('window_width',960)),'window.width')
         logical_height=integer(window.get('height',game.get('window_height',540)),'window.height')
         scale_mode=window.get('scale_mode','fit')
@@ -69,4 +74,4 @@ class ProjectConfig:
                    integer(window.get('fps_limit',game.get('fps',60)),'window.fps_limit',0),
                    integer(window.get('physics_fps',60),'window.physics_fps'),
                    local(storage,'storage.directory') if storage else None,window_size,scale_mode,
-                   local(theme,'ui.theme') if theme else None)
+                   local(theme,'ui.theme') if theme else None,persist_preferences)

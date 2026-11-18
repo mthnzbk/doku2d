@@ -26,7 +26,7 @@ class Game:
     def __init__(self, title="Doku2D", size=(960, 540), *, fps_limit=60,
                  physics_fps=60, services=None, project_root=None, asset_root=None,
                  save_dir=None, app_id=None, window_size=None, scale_mode="fit",
-                 bar_color=Color.BLACK, theme=None):
+                 bar_color=Color.BLACK, theme=None, persist_preferences=False):
         self._window = None
         self._closed = False
         self._running = True
@@ -46,6 +46,7 @@ class Game:
         self._flushing = False
         self._camera = None
         self._audio_listener = None
+        self._audio = None
         self._ui = None
         self._input = Input()
         self._physics = None
@@ -56,6 +57,10 @@ class Game:
         self._app_id=app_id or re.sub(r'[^A-Za-z0-9_.-]+','-',str(title)).strip('.-') or 'doku2d-game'
         self._saves=SaveStore(self._project_root/Path(save_dir) if save_dir is not None else None,app_id=self._app_id)
         self._settings=None
+        self._persist_preferences = bool(persist_preferences)
+        if self._persist_preferences:
+            self.input._restore_preferences(self._preferences('input'),
+                                            lambda data: self._remember_preferences('input', data))
         self._services = Services(self)
         self._accumulator = 0.0
         self._clear_color = Color(18, 24, 38)
@@ -84,6 +89,16 @@ class Game:
     def settings(self):
         if self._settings is None:self._settings=Settings(self.saves)
         return self._settings
+
+    def _preferences(self, section):
+        data = self.settings.get('doku2d', {})
+        return data.get(section, {}) if isinstance(data, dict) else {}
+
+    def _remember_preferences(self, section, value):
+        data = self.settings.get('doku2d', {})
+        sections = dict(data) if isinstance(data, dict) else {}
+        sections[section] = value
+        self.settings['doku2d'] = sections
 
     @property
     def title(self):
@@ -234,6 +249,17 @@ class Game:
     @property
     def input(self):
         return self._input
+
+    @property
+    def audio(self):
+        if self._audio is None:
+            from ..audio.mixer import AudioMixer
+            if self._persist_preferences:
+                self._audio = AudioMixer(self, preferences=self._preferences('audio'),
+                                         save=lambda data: self._remember_preferences('audio', data))
+            else:
+                self._audio = AudioMixer(self)
+        return self._audio
 
     @property
     def physics(self):

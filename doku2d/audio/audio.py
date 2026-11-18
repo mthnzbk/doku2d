@@ -11,7 +11,7 @@ class AudioPlayer(Entity):
     _is_audio_player = True
 
     def __init__(self, audio=None, *, name=None, autoplay=False, loop=False, stream=False,
-                 volume=100, pitch_scale=1, max_polyphony=1):
+                 volume=100, pitch_scale=1, max_polyphony=1, bus='SFX'):
         super().__init__(name)
         self._audio = None
         self._buffer = None
@@ -23,6 +23,7 @@ class AudioPlayer(Entity):
         self._loop = bool(loop)
         self._autoplay = bool(autoplay)
         self._stream = bool(stream)
+        self.bus = bus
         self.audio = audio
         self.volume = volume
         self.pitch_scale = pitch_scale
@@ -92,7 +93,22 @@ class AudioPlayer(Entity):
         self._stream_paused = bool(value)
         self._audio_update(suspended=self.game is not None and not self.can_process())
     @property
-    def effective_volume(self): return self.volume
+    def bus(self):
+        return self._bus
+
+    @bus.setter
+    def bus(self, value):
+        if not isinstance(value, str) or not value or value != value.strip():
+            raise ValueError('Name must be a nonempty audio bus name')
+        if self.game is not None:
+            self.game.audio[value]
+        self._bus = value
+        self._configure_all()
+
+    @property
+    def effective_volume(self):
+        gain = self.game.audio._gain(self.bus) if self.game else 1.0
+        return self.volume * gain
     @property
     def pan(self): return 0.0
 
@@ -111,7 +127,7 @@ class AudioPlayer(Entity):
         if self.audio is None: raise ValueError('Set audio before calling play()')
         if not isfinite(from_position) or from_position < 0: raise ValueError('Playback position cannot be negative')
         if self.stream and isinstance(self.audio,(str,Path)):
-            path = self.game.resources.root/Path(self.audio) if self.game else Path(self.audio)
+            path = self.game.resources.resolve(self.audio) if self.game else Path(self.audio)
             voice = Music.from_file(str(path))
         else:
             if self._buffer is None:
@@ -150,6 +166,8 @@ class AudioPlayer(Entity):
         if had_voices and not self._voices: self.finished.emit()
 
     def on_added(self):
+        self.game.audio[self.bus]
+        self._configure_all()
         if self.autoplay and not self.playing: self.play()
     def on_removed(self): self.stop()
 
@@ -213,7 +231,7 @@ class PositionalAudio(AudioPlayer):
     def effective_volume(self):
         delta = self._relative()
         gain = max(0,1-hypot(delta.x,delta.y)/self.max_distance)**self.attenuation
-        return self.volume*gain
+        return super().effective_volume * gain
     @property
     def pan(self):
         return max(-1,min(1,self._relative().x/self.panning_distance*self.panning_strength))

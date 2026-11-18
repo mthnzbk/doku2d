@@ -17,11 +17,11 @@ class JoyButton:
 class JoyAxis:
     axis: object
     direction: int = 1
-    deadzone: float = 0.2
+    deadzone: float | None = None
     device: int | None = None
 
     def __post_init__(self):
-        if self.direction not in (-1,1) or not 0 <= self.deadzone < 1:
+        if self.direction not in (-1,1) or self.deadzone is not None and not 0 <= self.deadzone < 1:
             raise ValueError("Axis direction must be -1/1 and deadzone in [0,1)")
         if isinstance(self.axis,str):
             object.__setattr__(self,"axis",getattr(Axis,self.axis.upper()))
@@ -35,6 +35,9 @@ class MouseButton:
 class Input:
     def __init__(self):
         self._bindings = {}
+        self._overrides = {}
+        self._joy_deadzone = 0.2
+        self._save_preferences = None
         self._global = set()
         self._keys = set()
         self._blocked_keys = set()
@@ -66,15 +69,71 @@ class Input:
     def bind(self, action, *bindings, global_action=False):
         if not isinstance(action,str) or not action:
             raise ValueError("Action names must be nonempty strings")
-        if not all(isinstance(item,(int,JoyAxis,JoyButton,MouseButton)) for item in bindings):
-            raise TypeError("Bindings must be Key constants, JoyAxis, JoyButton or MouseButton")
-        self._bindings[action] = tuple(bindings)
+        self._check_bindings(bindings)
+        self._bindings[action] = self._overrides.get(action, bindings)
         if global_action:
             self._global.add(action)
         else:
             self._global.discard(action)
         self._refresh()
         return self
+
+    @staticmethod
+    def _check_bindings(bindings):
+        if not all(isinstance(item, (int, JoyAxis, JoyButton, MouseButton)) for item in bindings):
+            raise TypeError('Bindings must be Key constants, JoyAxis, JoyButton or MouseButton')
+
+    def get_bindings(self, action):
+        return self._bindings[action]
+
+    def set_bindings(self, action, *bindings):
+        """Set the player's bindings for a registered action, keeping its global flag."""
+        if action not in self._bindings:
+            raise KeyError(action)
+        self._check_bindings(bindings)
+        self._overrides[action] = self._bindings[action] = bindings
+        self._refresh()
+        self._remember()
+
+    @property
+    def joy_deadzone(self):
+        return self._joy_deadzone
+
+    @joy_deadzone.setter
+    def joy_deadzone(self, value):
+        if not 0 <= value < 1:
+            raise ValueError('Joystick deadzone must be in [0, 1)')
+        if value != self._joy_deadzone:
+            self._joy_deadzone = float(value)
+            self._refresh()
+            self._remember()
+
+    def _restore_preferences(self, data, save):
+        if isinstance(data, dict):
+            overrides = data.get('bindings', {})
+            if isinstance(overrides, dict):
+                for name, bindings in overrides.items():
+                    try:
+                        if not isinstance(bindings, list):
+                            continue
+                        self._overrides[name] = tuple(_decode_binding(binding) for binding in bindings)
+                    except (TypeError, ValueError, KeyError):
+                        continue
+                    if name in self._bindings:
+                        self._bindings[name] = self._overrides[name]
+            deadzone = data.get('joy_deadzone', 0.2)
+            if type(deadzone) in (int, float) and 0 <= deadzone < 1:
+                self._joy_deadzone = float(deadzone)
+        self._refresh()
+        self._save_preferences = save
+
+    def _remember(self):
+        if self._save_preferences is not None:
+            self._save_preferences({
+                'joy_deadzone': self.joy_deadzone,
+                'bindings': {name: [_encode_binding(binding) for binding in bindings]
+                             for name, bindings in self._overrides.items()},
+            })
 
     def _binding_strength(self, binding):
         if isinstance(binding,JoyButton):
@@ -84,7 +143,8 @@ class Input:
             values = [max(0,value*binding.direction) for (device,axis),value in self._axes.items()
                       if axis == binding.axis and (binding.device is None or device == binding.device)]
             value = max(values,default=0)
-            return max(0,(value-binding.deadzone)/(1-binding.deadzone))
+            deadzone = self.joy_deadzone if binding.deadzone is None else binding.deadzone
+            return max(0, (value - deadzone) / (1 - deadzone))
         if isinstance(binding,MouseButton):
             return float(binding.button in self._mouse)
         return float(binding in self._keys and binding not in self._blocked_keys)
@@ -206,6 +266,39 @@ class Input:
     def _end_frame(self):
         self._pressed.clear()
         self._released.clear()
+
+
+def _encode_binding(binding):
+    if isinstance(binding, JoyAxis):
+        return {'type': 'axis', 'axis': int(binding.axis), 'direction': binding.direction,
+                'deadzone': binding.deadzone, 'device': binding.device}
+    if isinstance(binding, JoyButton):
+        return {'type': 'joy_button', 'button': binding.button, 'device': binding.device}
+    if isinstance(binding, MouseButton):
+        return {'type': 'mouse_button', 'button': binding.button}
+    return {'type': 'key', 'key': int(binding)}
+
+
+def _decode_binding(data):
+    def integer(name):
+        value = data[name]
+        if type(value) is not int:
+            raise ValueError('Expected an integer binding value')
+        return value
+
+    def device():
+        return None if data.get('device') is None else integer('device')
+
+    kind = data['type']
+    if kind == 'key':
+        return integer('key')
+    if kind == 'axis':
+        return JoyAxis(integer('axis'), integer('direction'), data.get('deadzone'), device())
+    if kind == 'joy_button':
+        return JoyButton(integer('button'), device())
+    if kind == 'mouse_button':
+        return MouseButton(integer('button'))
+    raise ValueError('Unknown input binding type')
 
 
 __all__ = ["Input","Key","JoyAxis","JoyButton","MouseButton"]
