@@ -2,7 +2,7 @@
 from sfml.graphics import Color
 from sfml.system import Vector2
 from .config import ProjectConfig
-__version__="0.1.0"
+__version__="1.0.0rc1"
 from .gui import *
 from .rendering import *
 from .core import *

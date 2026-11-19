@@ -1,7 +1,7 @@
 # Doku2D
 
-Python ile kod odaklı 2D oyun framework'ü. Nesneler doğrudan `Game` içine kaydolur;
-özel Scene, root veya sahne ağacı gerektirmez.
+Python ile kod odaklı 2D oyun framework'ü. Nesneler `Game` içine kaydolur,
+bölüm geçişleri `Scope` ile, çizim katmanları `Canvas` ile yönetilir.
 
 ## Kurulum ve ilk proje
 
@@ -41,6 +41,10 @@ Galeride Gece ve Kum temaları aynı kontroller üzerinde denenebilir.
 
 ## Belgeler
 
+- [10 adımda Doku2D](doc/tutorials/README.md)
+- [Sınıflar, metotlar ve özellikler](doc/api-reference.md)
+- [Platformlar, temiz kurulum ve Nuitka](doc/build.md)
+- [1.0 sürüm adayı notları](CHANGELOG.md)
 - [Başlangıç ve çekirdek](doc/using.md)
 - [CanvasGroup, ortam rengi, kaynaklar ve kayıt](doc/runtime.md)
 - [Proje araçları ve paketleme](doc/project.md)

@@ -76,6 +76,8 @@ def standalone_command(config, *, output_dir=None):
             if not path.is_relative_to(config.assets):
                 relative = path.relative_to(config.root).as_posix()
                 command.append(f'--include-data-files={path}={relative}')
+    if os.environ.get('DOKU2D_BUILD_DOWNLOAD_TOOLS') == '1':
+        command.append('--assume-yes-for-downloads')
     command.append(str(config.entry))
     return command
 

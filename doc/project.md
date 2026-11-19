@@ -84,3 +84,6 @@ varlıklar ve motor verileri pakete katılır. Windows'ta çıktı
 Yeni derleme başarısız olursa önceki uygulama yerinde kalır. İlk derlemede Nuitka
 gerekli araçları indirmek için terminalde onay isteyebilir. Nuitka ve uyumlu bir C
 derleyicisi gerekir. [Nuitka gereksinimleri](https://nuitka.net/user-documentation/user-manual.html)
+
+Temiz wheel kurulumu, başlangıç oyununun kontrolü ve derlenen uygulamayı denemek
+için [platform ve sürüm doğrulama rehberine](build.md) bak.

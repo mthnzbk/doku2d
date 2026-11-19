@@ -108,7 +108,8 @@ class ProjectWorkTests(unittest.TestCase):
                 anim=game.add(AnimatedSprite('sheet.png',frame_size=(4,4)));anim.add_animation('walk',[0,1])
                 self.assertIs(anim.texture,a.texture)
                 font=game.ui.theme.get_font()
-                self.assertIs(font,game.resources.get_font(WORKSPACE/'doku2d/assets/fonts/NotoSans.ttf'))
+                packaged_font = Path(doku2d.__file__).parent / 'assets/fonts/NotoSans.ttf'
+                self.assertIs(font, game.resources.get_font(packaged_font))
                 self.assertEqual(Theme(None,20).font_size,20)
                 self.assertEqual(game.resources.cache_info['textures'],1)
                 game.resources.unload('sheet.png');self.assertIsNot(game.resources.get_texture('sheet.png'),a.texture)

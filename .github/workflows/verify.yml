@@ -1,0 +1,54 @@
+name: Release verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      native:
+        description: Build and launch both standalone games
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Verify installed wheel
+        run: python tools/release_check.py --tests
+      - name: Verify API reference
+        if: matrix.python == '3.13'
+        run: |
+          python -m pip install -e .
+          python tools/generate_api_reference.py --check
+      - name: Build and launch standalone game
+        if: matrix.python == '3.13' && (inputs.native || startsWith(github.ref, 'refs/tags/'))
+        run: python tools/release_check.py --native --download-tools
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install graphics libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libxrender1 libxrandr2 libxcursor1 libxi6 libudev1 libgl1-mesa-dri libglx-mesa0 libopengl0 patchelf
+      - name: Verify installed wheel
+        run: xvfb-run -a python tools/release_check.py
+      - name: Build and launch standalone game
+        if: inputs.native || startsWith(github.ref, 'refs/tags/')
+        run: xvfb-run -a python tools/release_check.py --native

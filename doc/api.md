@@ -13,7 +13,7 @@ katman çizimi Canvas üzerinden yürür; SceneTree, parent ve root eklenmedi.
 | Parallax adlı etkisiz Entity | Canvas(parallax=...) veya TileLayer.parallax. |
 | CollisionShape2D / CollisionPolygon2D | Gövdenin shape alanında Box/Circle/Polygon/Segment. |
 | RayCast2D taslağı | RayCast veya game.physics.raycast. |
-| Shader adlı boş wrapper | Özel Entity.render içinde sfml.graphics.Shader. |
+| Shader adlı boş wrapper | Nesne veya Canvas üzerinde `ShaderMaterial`. |
 | Line, Path2D, PathFollow taslakları | Desteklenen dışa aktarımdan kaldırıldı; henüz çalışan motor API'si değiller. |
 | Entity.material | İşlenmeyen alan kaldırıldı; render kodunda gerçek RenderStates kullan. |
 | CollisionObject pickable/priority/disable_mode ve kullanılmayan mouse sinyalleri | Yalnızca doğrulanan layer/mask filtre kaynağı kaldı. |
@@ -43,3 +43,18 @@ belirtilmiştir; Sprite kare animasyonu ile Timeline ad sinyalleri farklıdır.
 
 Bu temizlik eski, işlevsiz prototip isimlerini kaldırır. Önceki projeler için
 uyumluluk yalnızca çalışan Resource ve CanvasModulate adlarında korunur.
+
+## 1.0 uyumluluk kapsamı
+
+1.0 kararlı sürümüyle birlikte paket kökünden belgelenen sınıflar ve fonksiyonlar,
+yaşam döngüsü kancaları, sinyal argümanları ve belgelenen `doku2d.toml` anahtarları
+genel API kapsamındadır. `Resource` ve `CanvasModulate` uyumluluk adları 1.x'te
+korunur. Kararlı sürümden sonra, kullanım dışı bırakılan API için önce geçiş yolu
+belgelenir. Uyumsuz kaldırmalar bir sonraki ana sürüme bırakılır.
+
+Alt çizgiyle başlayan üyeler ve motorun iç modül yerleşimi değişebilir.
+`ConfigFile`, `Settings` ve kayıt yardımcıları oyunun verisini okur ve yazar.
+Bir oyunun kayıt şeması değişirse o oyunun yükleyicisi, önceki kayıtları kendi
+şema numarasına göre dönüştürebilir.
+
+[Sınıflar, metotlar ve özellikler](api-reference.md) · [10 adımda Doku2D](tutorials/README.md)
