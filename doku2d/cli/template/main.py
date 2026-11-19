@@ -65,7 +65,7 @@ class Starter(Entity):
     def make_coins(self,positions):
         for coin in self.coins:
             if coin.game is self.game or coin._pending_game is self.game:self.game.remove(coin)
-        self.coins=[self.game.add(Coin(position,self)) for position in positions]
+        self.coins=[self.game.add(Coin(position,self), scope=self.scope) for position in positions]
     def save(self):
         try:
             self.game.saves.save('slot1',dict(version=1,score=self.score,position=list(self.player.position),
