@@ -1,9 +1,10 @@
 from collections import deque
+from weakref import WeakKeyDictionary
 from pathlib import Path
 from contextlib import contextmanager
 import re
 from math import isfinite
-from sfml.graphics import Color, Rect, RenderStates, RenderTexture, RenderWindow, Sprite, View
+from sfml.graphics import Color, Rect, RenderStates, Sprite, View
 from sfml.system import Clock, Vector2
 from sfml.window import Event, VideoMode
 from .canvas import Canvas
@@ -15,6 +16,7 @@ from .signal import Signal
 from .singleton import Services, instantiate
 from .input import Input, Key
 from .debug import DebugOverlay
+from .localization import Localization
 
 
 class Game:
@@ -28,7 +30,7 @@ class Game:
                  physics_fps=60, services=None, project_root=None, asset_root=None,
                  save_dir=None, app_id=None, window_size=None, scale_mode="fit",
                  bar_color=Color.BLACK, theme=None, debug=False, debug_key=Key.F3,
-                 persist_preferences=False):
+                 persist_preferences=False, locale="en", fallback_locale="en", catalogs=None):
         self._window = None
         self._closed = False
         self._running = True
@@ -38,6 +40,10 @@ class Game:
         self._scopes = set()
         self._active_scope = None
         self._surface = None
+        self.batching = True
+        self.culling = True
+        self._sprite_batches = WeakKeyDictionary()
+        self._screen_notifiers = {}
         self._window_size = None
         self.scale_mode = scale_mode
         self.bar_color = bar_color
@@ -54,6 +60,7 @@ class Game:
         self._debug = DebugOverlay(self, enabled=debug, key=debug_key)
         self._physics = None
         self._lighting = None
+        self._canvas_effect = None
         self._world = Canvas()
         self._project_root=Path(project_root or Path.cwd()).resolve()
         self._resources=Resources(self._project_root/Path(asset_root or '.'))
@@ -64,6 +71,14 @@ class Game:
         if self._persist_preferences:
             self.input._restore_preferences(self._preferences('input'),
                                             lambda data: self._remember_preferences('input', data))
+            saved_locale = self._preferences('locale')
+            if isinstance(saved_locale, str) and saved_locale.strip():
+                locale = saved_locale
+        self._localization = Localization(self.resources, locale=locale, fallback=fallback_locale)
+        for language, path in (catalogs or {}).items():
+            self.localization.load_catalog(language, path)
+        if self._persist_preferences:
+            self.localization.locale_changed.connect(self._save_locale)
         self._services = Services(self)
         self._accumulator = 0.0
         self._clear_color = Color(18, 24, 38)
@@ -102,6 +117,21 @@ class Game:
         sections = dict(data) if isinstance(data, dict) else {}
         sections[section] = value
         self.settings['doku2d'] = sections
+
+    def _save_locale(self, locale):
+        self._remember_preferences('locale', locale)
+
+    @property
+    def localization(self):
+        return self._localization
+
+    @property
+    def locale(self):
+        return self.localization.locale
+
+    @locale.setter
+    def locale(self, value):
+        self.localization.locale = value
 
     @property
     def title(self):
@@ -535,6 +565,7 @@ class Game:
         if not isfinite(dt) or dt < 0:
             raise ValueError("Delta time must be finite and nonnegative")
         self.flush_deferred()
+        self._refresh_screen_notifiers()
         if self._ui:
             self._ui.arrange()
         self.input.set_gui_captured(self._ui is not None and self._ui.keyboard_captured)
@@ -589,9 +620,33 @@ class Game:
     def draw_list(self):
         # A Canvas is one composited surface; equal orders keep registration order.
         indices={}
-        for obj in self.objects:indices.setdefault(obj.canvas or self.world,len(indices))
-        return sorted((obj for obj in self.objects if obj.visible and obj not in self._removing),
+        for obj in self.objects:
+            if not getattr(obj, '_is_screen_notifier', False):
+                indices.setdefault(obj.canvas or self.world, len(indices))
+        return sorted((obj for obj in self.objects if not getattr(obj, '_is_screen_notifier', False)
+                       and obj.visible and obj not in self._removing),
                       key=lambda obj:((obj.canvas or self.world).order,indices[obj.canvas or self.world],obj.z_index))
+
+    def _refresh_screen_notifiers(self):
+        if not self._screen_notifiers:
+            return
+        views = {}
+        self._dispatching += 1
+        try:
+            with self.debug._measure('update'):
+                changes = []
+                for notifier in tuple(self._screen_notifiers):
+                    if notifier not in self._removing:
+                        signal = notifier._update_visibility(views)
+                        if signal is not None:
+                            changes.append((notifier, signal))
+                for notifier, signal in changes:
+                    if notifier not in self._removing:
+                        with self._using_scope(notifier.scope):
+                            signal.emit()
+        finally:
+            self._dispatching -= 1
+            self.flush_deferred()
 
     @staticmethod
     def _pixel_view(size):
@@ -609,18 +664,64 @@ class Game:
             view.rotation = camera.view_rotation
         return view
 
-    def _draw_canvas_objects(self,target,objects,canvas):
-        view=self.make_view(canvas)
-        for obj in objects:
-            if getattr(obj,'_is_light',False) or getattr(obj,'_is_occluder',False) or getattr(obj,'_is_canvas_modulate',False):continue
-            target.view=view
-            states=RenderStates(transform=obj.transform)
-            if getattr(obj,'_is_control',False) and self._ui:self._ui.draw(obj,target,states)
-            else:obj.render(target,states)
+    def _draw_canvas_objects(self, target, objects, canvas, *, batch_owner=None):
+        from ..rendering.batching import SpriteBatch, sprite_source, supports_pose
+        from ..rendering.culling import ViewCuller, affine, pose
+
+        view = self.make_view(canvas)
+        batch = None
+        known_pose = batch_owner is None or supports_pose(batch_owner)
+        culler = ViewCuller(view) if self.culling and known_pose else None
+        group = affine(pose(batch_owner)) if culler is not None and batch_owner is not None else None
+        if self.batching and known_pose:
+            owner = canvas if batch_owner is None else batch_owner
+            batch = self._sprite_batches.get(owner)
+            if batch is None:
+                batch = self._sprite_batches[owner] = SpriteBatch()
+            batch.begin(target, view, owner)
+        try:
+            for obj in objects:
+                if getattr(obj, '_is_light', False) or getattr(obj, '_is_occluder', False) or getattr(obj, '_is_canvas_modulate', False):
+                    continue
+                sprite = sprite_source(obj) if batch is not None or culler is not None else None
+                if sprite is not None:
+                    position, quad = pose(obj), sprite._batch_quad()
+                    if culler is not None and obj.cullable and not culler.sprite(quad, position, group):
+                        continue
+                    if batch is not None and obj.batchable:
+                        batch.add(obj, sprite, position, quad)
+                        continue
+                if batch is not None:
+                    batch.flush()
+                target.view = view
+                shader = obj.material._resolve(self.resources) if obj.material is not None else None
+                states = RenderStates(transform=obj.transform, shader=shader)
+                if getattr(obj, '_is_control', False) and self._ui:
+                    self._ui.draw(obj, target, states)
+                else:
+                    obj.render(target, states)
+            if batch is not None:
+                batch.flush()
+        finally:
+            if batch is not None:
+                batch.end()
+
+    def create_render_texture(self, size=None):
+        """Create an SFML render texture included in this game's debug draw count."""
+        from ..rendering.targets import MeasuredTexture
+        target = MeasuredTexture(*(self.size if size is None else self._dimensions(size)))
+        target._debug = self.debug
+        return target
 
     def render(self, target):
-        with self.debug._measure('render'):
-            self._render_frame(target)
+        self.debug._working_draw_calls = 0
+        self.debug._counting_draws = self.debug.enabled
+        try:
+            with self.debug._measure('render'):
+                self._render_frame(target)
+        finally:
+            self.debug._counting_draws = False
+        self.debug._last_draw_calls = self.debug._working_draw_calls
         self.debug._publish_profile()
 
     def _render_frame(self, target):
@@ -632,7 +733,7 @@ class Game:
         if not w or not h:
             return
         if self._surface is None or tuple(self._surface.size) != tuple(self.size):
-            self._surface = RenderTexture(*self.size)
+            self._surface = self.create_render_texture()
         surface = self._surface
         surface.reset_GL_states()
         surface.clear(self.clear_color)
@@ -662,23 +763,46 @@ class Game:
                 self.debug._begin_frame()
             for obj in visible:
                 if obj._canvas_group is None:groups.setdefault(obj.canvas or self.world,[]).append(obj)
-            for canvas,objects in groups.items():
-                tint=canvas.ambient
-                lit=canvas.lighting and ((tint.r,tint.g,tint.b,tint.a)!=(255,255,255,255) or any(
-                    getattr(obj,'_is_canvas_modulate',False) and obj.enabled or getattr(obj,'_is_light',False) and obj.enabled for obj in objects))
-                if lit:
-                    if self._lighting is None:
-                        from ..rendering.lighting import LightingRenderer
-                        self._lighting=LightingRenderer(self)
-                    self._lighting.render(target,canvas,objects,self._draw_canvas_objects)
-                else:self._draw_canvas_objects(target,objects,canvas)
+            added_canvas = False
+            for canvas in (self.world, self._ui.canvas if self._ui is not None else None):
+                if canvas is not None and canvas.material is not None and canvas not in groups:
+                    groups[canvas] = []
+                    added_canvas = True
+            layers = sorted(groups.items(), key=lambda pair: pair[0].order) if added_canvas else groups.items()
+            for canvas, objects in layers:
+                if canvas.material is None:
+                    self._draw_layer(target, canvas, objects)
+                else:
+                    if self._canvas_effect is None:
+                        from ..rendering.shader import CanvasEffect
+                        self._canvas_effect = CanvasEffect(self)
+                    self._canvas_effect.render(target, canvas.material,
+                                               lambda surface: self._draw_layer(surface, canvas, objects))
             if self._ui:self._ui.draw_popup(target)
             if self.debug.visible:
-                self.debug._draw(target, len(visible))
+                counting = self.debug._counting_draws
+                self.debug._counting_draws = False
+                try:
+                    self.debug._draw(target, len(visible))
+                finally:
+                    self.debug._counting_draws = counting and self.debug.enabled
         finally:
             target.view=original_view
             self._dispatching-=1
             self.flush_deferred()
+
+    def _draw_layer(self, target, canvas, objects):
+        tint = canvas.ambient
+        lit = canvas.lighting and ((tint.r, tint.g, tint.b, tint.a) != (255, 255, 255, 255) or any(
+            (getattr(obj, '_is_canvas_modulate', False) or getattr(obj, '_is_light', False)) and obj.enabled
+            for obj in objects))
+        if lit:
+            if self._lighting is None:
+                from ..rendering.lighting import LightingRenderer
+                self._lighting = LightingRenderer(self)
+            self._lighting.render(target, canvas, objects, self._draw_canvas_objects)
+        else:
+            self._draw_canvas_objects(target, objects, canvas)
 
     def handle_event(self, event):
         self._dispatching += 1
@@ -735,7 +859,9 @@ class Game:
             except Exception as error:errors.append(error)
         self.resources.clear()
         self._lighting=None
+        self._canvas_effect = None
         self._surface=None
+        self._sprite_batches.clear()
         if errors:
             raise errors[0]
 
@@ -744,7 +870,9 @@ class Game:
             raise RuntimeError("Create a new Game before starting another run")
         if max_frames is not None and (int(max_frames) != max_frames or max_frames < 0):
             raise ValueError("max_frames must be a nonnegative integer")
-        self._window = RenderWindow(VideoMode(*self.window_size), self.title)
+        from ..rendering.targets import MeasuredWindow
+        self._window = MeasuredWindow(VideoMode(*self.window_size), self.title)
+        self._window._debug = self.debug
         try:
             self.window.set_framerate_limit(self.fps_limit)
             for obj in objects:

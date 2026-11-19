@@ -156,3 +156,46 @@ karakterleri üzerinden çalışır; birleşik Unicode dizileri ve karmaşık
 metin şekillendirme için tam bir glyph motoru sağlamaz.
 
 GUI örneğinin **Text effects** sekmesi beş efekti ve birleşik kullanımını gösterir.
+## Yerelleştirme
+
+Varlık dizininde `locale/tr.json` ve `locale/en.json` gibi dosyalar oluştur.
+Kataloglar düz bir anahtar-metin sözlüğüdür. Aşağıdaki örnek `tr.json` içeriğidir:
+
+```json
+{"menu.play": "Oyna", "menu.coins": "{count} altın"}
+```
+
+```python
+from doku2d import Button, Label, tr
+
+game.localization.load_catalog('tr', 'res://locale/tr.json')
+game.localization.load_catalog('en', 'res://locale/en.json')
+play = game.add(Button(text=tr('menu.play'), fit_text=True))
+coins = game.add(Label(text=tr('menu.coins', count=3)))
+game.locale = 'tr'
+```
+
+`tr(...)` ile işaretlenen düğme, etiket, liste öğesi, sekme ve metin kutusu
+ipucu yeni dile geçer. Düz metinler ve oyuncunun yazdığı içerik olduğu gibi
+kalır. Bir `Label` veya `Button` üzerinde `fit_text=True` metne göre genişliği
+ayarlar. `HBox` içinde de yanındaki kontrolleri buna göre yerleştirir.
+
+Eksik anahtar önce dilin genel sürümünde aranır (`tr-TR` → `tr`), ardından
+yedek dil kullanılır. Anahtar hâlâ bulunamazsa `tr(..., default='Oyna')`
+metni veya anahtarın kendisi gösterilir. `game.localization.locale_changed`
+uygulamanın kendi dil değiştirme koduna bağlanabilir.
+
+`Game.from_project()` için katalogları doğrudan proje dosyasında tanımlayabilirsin:
+
+```toml
+[localization]
+locale = "tr"
+fallback = "en"
+
+[localization.catalogs]
+tr = "locale/tr.json"
+en = "locale/en.json"
+```
+
+Yollar varlık dizinine göredir ve normal derlemeye dahil edilir.
+`persist_preferences=True` açıksa seçilen dil de ayarlara kaydedilir.

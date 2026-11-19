@@ -1,6 +1,6 @@
 """Per-canvas offscreen lighting. Visibility fans and extruded polygons cast shadows."""
 from math import sin,cos,atan2,pi,hypot,ceil
-from sfml.graphics import (Color,Image,Texture,RenderTexture,RenderStates,Shader,Sprite,
+from sfml.graphics import (Color,Image,Texture,RenderStates,Shader,Sprite,
                            Vertex,VertexArray,PrimitiveType,ConvexShape,BLEND_ADD,BLEND_NONE)
 from sfml.system import Vector2
 from .light import PointLight,DirectionalLight,color
@@ -54,7 +54,7 @@ class LightingRenderer:
         size=tuple(map(int,size))
         if size!=self._size:
             self._size=size
-            self._scene = RenderTexture(*size)
+            self._scene = self.game.create_render_texture(size)
             self._lights = self._scratch = None
     def _gradient(self,falloff):
         key=round(falloff,4)
@@ -146,7 +146,7 @@ class LightingRenderer:
                   and (obj.target is None or obj.target.game is self.game)]
         if active:
             if self._lights is None:
-                self._lights = RenderTexture(*self._size)
+                self._lights = self.game.create_render_texture(self._size)
             lights = self._lights
             lights.reset_GL_states();lights.view=view;lights.clear(Color.BLACK)
             occluders = [obj for obj in objects if getattr(obj, '_is_occluder', False) and obj.enabled
@@ -157,7 +157,7 @@ class LightingRenderer:
                     self._point(light, blockers)
                 elif isinstance(light, DirectionalLight):
                     if self._scratch is None:
-                        self._scratch = RenderTexture(*self._size)
+                        self._scratch = self.game.create_render_texture(self._size)
                     self._scratch.reset_GL_states()
                     self._directional(light, blockers, view)
             lights.display()

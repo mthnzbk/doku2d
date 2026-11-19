@@ -219,6 +219,73 @@ içinden çağrıldığında kendi satırında sayılır. Yanındaki sayı o kar
 sorgusu sayısıdır. Koddan `game.debug.profile_ms` ve `game.debug.path_queries`
 ile okunabilir. `game.debug.show_profile = False` süre toplamayı da kapatır.
 
+F3'teki `Draw calls`, son karede oyun penceresine ve motorun ara yüzeylerine
+yapılan çizim çağrılarını sayar. Debug katmanının kendi çizimi sayıya girmez.
+Koddan `game.debug.draw_calls` ile okunur. Pencere dışında da tam sayım için
+hedefi `game.create_render_texture()` ile oluştur.
+
+Motor aynı Canvas veya CanvasGroup içinde art arda gelen aynı dokulu
+`Sprite` ve `AnimatedSprite` nesnelerini toplu çizer. Kare, bölge veya konum
+değiştiğinde ilgili köşeler yenilenir. Her parçacık yayıcısı da parçacıklarını
+tek çağrıda çizer. Özel shader kullanan çizimler ayrı kalır. Gerekirse
+`sprite.batchable = False` ile bir nesneyi, `game.batching = False` ile tüm
+toplu çizimi kapatıp farkı ölçebilirsin.
+
+## Sprite atlası ve kamera dışı çizim
+
+```python
+from doku2d import AnimatedSprite, Sprite, SpriteAtlas
+
+atlas = game.resources.load_atlas('res://art/world.json')
+coin = game.add(Sprite(atlas['coin']))
+hero = game.add(AnimatedSprite())
+hero.add_animation('idle', [atlas['idle_0'], atlas['idle_1']], fps=6)
+hero.play('idle')
+play_button.icon = atlas['play_icon']
+```
+
+Basit atlas JSON dosyası şu yapıyı kullanır:
+
+```json
+{"image":"world.png", "frames":{"coin":[0,0,16,16], "play_icon":[16,0,24,24]}}
+```
+
+Görüntü yolu JSON dosyasına göre çözülür. Aseprite ve TexturePacker JSON çıktıları
+kesilmemiş ve döndürülmemiş karelerle de çalışır. Ayrı dosyaları doğrudan bir
+dokuya toplamak için `SpriteAtlas.pack({'coin': 'res://coin.png', 'icon': 'res://icon.png'},
+resources=game.resources)` kullan. Animasyon kareleri atlas bölgelerini veya
+normal sprite sheet indekslerini alır. UI ikonları aynı dokuyu paylaşır, UI
+kontrollerinin çizim sırası ve kırpması kendi çağrılarında kalır.
+
+Kamera dışındaki sprite ve parçacık çizimleri varsayılan olarak elenir. Kısmen
+görünen nesneler, döndürülmüş kamera ve CanvasGroup dönüşümleri hesaba katılır.
+Parçacık simülasyonu ekranda olmasa da sürer. Kendi shader'ıyla çizimi başka
+yere taşıyan nesneler otomatik elemeye girmez. Karşılaştırma için
+`game.culling = False` veya tek nesnede `sprite.cullable = False` kullanabilirsin.
+
+## Ekrana giriş ve çıkış
+
+```python
+from doku2d import ScreenNotifier
+
+watcher = game.add(ScreenNotifier(enemy, rect=(-16, -24, 32, 48), margin=64,
+                                   auto_process=True))
+watcher.screen_entered.connect(wake_up)
+watcher.screen_exited.connect(sleep)
+```
+
+Dikdörtgen hedefin yerel koordinatlarında belirtilir. `margin` her kenarı
+genişletir. Böylece düşman kamera kenarına varmadan uyanabilir. Hedef olmadan
+notifier kendi konumunu, dönüşümünü ve Canvas'ını kullanır. Hedef varsa ve
+notifier'a Canvas verilmemişse hedefin Canvas'ı kullanılır.
+
+`on_screen` son oyun adımındaki görünürlük sonucudur. Sinyaller yalnızca sonuç
+değiştiğinde gönderilir. `auto_process` varsayılan olarak kapalıdır. Açıldığında
+hedefin güncelleme kodu, animasyon ve NPC rota takibi ekran dışında durur.
+Çarpışma gövdesi fizik dünyasında kalır. Hedefin kendi `process_mode` ayarı
+korunur ve notifier kaldırıldığında görünürlük kısıtı kalkar. Aynı hedefe birkaç
+otomatik notifier bağlanırsa hedefin işlemesi için hepsinin görünür olması gerekir.
+
 Yerleşik kısayolu `game.debug.key = None` ile kapatıp kendi olay kodundan
 `game.debug.toggle()` çağırabilirsin. Bu çağrı da debug modu kapalıyken katmanı
 açmaz. Proje dosyasından etkinleştirmek için:

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from sfml.graphics import Color, RenderStates, Transform
 from sfml.window import Event, Keyboard
-from ..core import Signal
+from ..core import Signal, LocalizedText
 from .base import Control
 from .buttons import BaseButton
 from .theme import box, color, label, texture, clipped
@@ -9,14 +9,14 @@ from .theme import box, color, label, texture, clipped
 
 @dataclass
 class Item:
-    text: str = ""
+    text: str | LocalizedText = ""
     icon: object = None
     selectable: bool = True
     disabled: bool = False
 
 
 def as_item(value):
-    return value if isinstance(value, Item) else Item(str(value))
+    return value if isinstance(value, Item) else Item(Control._caption(value))
 
 
 def popup_bounds(owner, width, height):
@@ -34,7 +34,8 @@ def popup_states(owner, target):
     target.view = owner.game.make_view(owner.game._ui.canvas)
     transform = Transform()
     transform.translate(owner._popup_rect[:2])
-    return RenderStates(transform=transform)
+    shader = owner.material._resolve(owner.game.resources) if owner.material is not None else None
+    return RenderStates(transform=transform, shader=shader)
 
 
 class ItemList(Control):
@@ -76,7 +77,7 @@ class ItemList(Control):
         self._scroll = 0
 
     def add_item(self, text, icon=None):
-        self.items.append(Item(str(text),icon))
+        self.items.append(Item(self._caption(text),icon))
         return len(self.items)-1
 
     def select(self, index, *, additive=False):
@@ -220,7 +221,7 @@ class TabBar(Control):
         self.tab_selected.emit(value)
 
     def add_tab(self,title):
-        self.tabs.append(str(title))
+        self.tabs.append(self._caption(title))
         if self.current_tab < 0: self.current_tab = 0
         return len(self.tabs)-1
 
@@ -333,7 +334,7 @@ class OptionButton(BaseButton):
         self._text = as_item(self.items[value]).text if value >= 0 else ""
 
     def add_item(self,text,icon=None):
-        self.items.append(Item(str(text),icon))
+        self.items.append(Item(self._caption(text),icon))
         if self.selected < 0: self.selected = 0
         return len(self.items)-1
 
@@ -355,7 +356,7 @@ class OptionButton(BaseButton):
             self.game._ui.popup = None
 
     def _visible_items(self):
-        return [i for i,item in enumerate(self.items) if self._search.lower() in as_item(item).text.lower()]
+        return [i for i,item in enumerate(self.items) if self._search.casefold() in self.localize(as_item(item).text).casefold()]
 
     def _popup_event(self,event):
         if event.type == Event.TEXT_ENTERED and self.search_bar:
@@ -400,7 +401,9 @@ class OptionButton(BaseButton):
             states = popup_states(self,target)
             _,_,width,height = self._popup_rect
             box(target,states,(0,0,width,height),self.theme.background,self.theme.border)
-            for row,index in enumerate(self._visible_items()[self._popup_scroll:self._popup_scroll+7]):
+            visible_items = self._visible_items()
+            self._popup_scroll = min(self._popup_scroll, max(0, len(visible_items)-7))
+            for row,index in enumerate(visible_items[self._popup_scroll:self._popup_scroll+7]):
                 item = as_item(self.items[index])
                 if index == self._popup_hover:
                     box(target,states,(2,2+row*self.row_height,width-4,self.row_height),self.theme.selection)

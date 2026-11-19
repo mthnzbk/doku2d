@@ -12,7 +12,17 @@ class Canvas:
         self.parallax = parallax
         self._ambient=Color.WHITE
         self._light_mask=1
+        self._material = None
         self.lighting=True
+
+    @property
+    def material(self):
+        return self._material
+
+    @material.setter
+    def material(self, value):
+        from ..rendering.shader import checked_material
+        self._material = checked_material(value)
 
     @property
     def name(self):

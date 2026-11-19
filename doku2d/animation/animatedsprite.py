@@ -7,6 +7,7 @@ from sfml.system import Vector2
 from ..core.entity import Entity
 from ..core.signal import Signal
 from ..rendering.sprite import Sprite
+from ..rendering.atlas import AtlasRegion
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,8 @@ class Animation:
 
 
 class AnimatedSprite(Entity):
+    batchable = True
+    cullable = True
     animation_changed = Signal()
     animation_finished = Signal()
     animation_looped = Signal()
@@ -27,6 +30,7 @@ class AnimatedSprite(Entity):
         super().__init__(name)
         self._resources=resources;self._texture_path=None
         self._visual = Sprite(resources=resources)
+        self._sheet_texture = None
         self._motion = None
         self._frame_size = None
         self._clips = {}
@@ -53,8 +57,9 @@ class AnimatedSprite(Entity):
     @staticmethod
     def _clip(frames, fps, loop):
         frames = tuple(frames)
-        if not frames or any(not isinstance(index,int) or index < 0 for index in frames):
-            raise ValueError("Animation frames must be a nonempty list of nonnegative indices")
+        if not frames or any(not isinstance(frame, AtlasRegion) and (not isinstance(frame, int) or frame < 0)
+                             for frame in frames):
+            raise ValueError('Animation frames must be nonnegative indices or atlas regions')
         if not isfinite(fps) or fps <= 0:
             raise ValueError("Animation fps must be positive and finite")
         return Animation(frames,float(fps),bool(loop))
@@ -68,7 +73,7 @@ class AnimatedSprite(Entity):
         return (int(texture.size.x/width),int(texture.size.y/height))
 
     def _validate_frames(self, clip, count):
-        if self.texture is not None and max(clip.frames) >= count:
+        if self._sheet_texture is not None and any(isinstance(frame, int) and frame >= count for frame in clip.frames):
             raise ValueError("Animation frame is outside the sprite sheet")
 
     @property
@@ -85,8 +90,10 @@ class AnimatedSprite(Entity):
         if value is not None and not isinstance(value,Texture):
             raise TypeError("texture must be an SFML Texture, path or None")
         columns,rows = self._grid(value,self._frame_size)
-        if value is not None and any(max(clip.frames) >= columns*rows for clip in self._clips.values()):
+        if value is not None and any(isinstance(frame, int) and frame >= columns*rows
+                                     for clip in self._clips.values() for frame in clip.frames):
             raise ValueError("The texture is too small for the existing animations")
+        self._sheet_texture = value
         self._visual.texture = value
         self._visual.hframes,self._visual.vframes = columns,rows
         self._apply_frame()
@@ -110,7 +117,7 @@ class AnimatedSprite(Entity):
         width,height = value
         if not isfinite(width) or not isfinite(height) or width <= 0 or height <= 0 or int(width) != width or int(height) != height:
             raise ValueError("Frame size must contain positive integer dimensions")
-        columns,rows = self._grid(self.texture,(width,height))
+        columns,rows = self._grid(self._sheet_texture,(width,height))
         for clip in self._clips.values():
             self._validate_frames(clip,columns*rows)
         self._frame_size = (int(width),int(height))
@@ -227,8 +234,15 @@ class AnimatedSprite(Entity):
 
     def _apply_frame(self):
         clip = self._clips.get(self.animation)
-        if clip is not None and self.texture is not None:
-            self._visual.frame = clip.frames[self.frame]
+        frame = clip.frames[self.frame] if clip is not None else None
+        if isinstance(frame, AtlasRegion):
+            if self._visual.atlas_region is not frame:
+                self._visual.texture = frame
+        else:
+            if self._visual.atlas_region is not None:
+                self._visual.texture = self._sheet_texture
+            if frame is not None and self._sheet_texture is not None:
+                self._visual.frame = frame
 
     def advance(self, dt):
         if self.motion is not None:self.motion.update()
@@ -265,6 +279,9 @@ class AnimatedSprite(Entity):
     def render(self, target, states):
         if self.texture is None and self._texture_path is not None:self._load_texture()
         self._visual.render(target,states)
+
+    def _batch_sprite(self):
+        return self._visual if type(self).render is AnimatedSprite.render else None
 
     @property
     def centered(self):

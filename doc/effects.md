@@ -206,3 +206,42 @@ yenilenir ve yeniden kullanılır.
 
 CanvasModulate uyumluluk adı korunur; AmbientLight, DayNightCycle ve gerçek CanvasGroup
 kullanımı için [runtime rehberine](runtime.md) bakın.
+## Kendi shader'ını kullanma
+
+`assets/shaders/tint.frag`:
+
+```glsl
+uniform sampler2D u_texture;
+uniform vec4 tint;
+
+void main() {
+    vec4 pixel = texture2D(u_texture, gl_TexCoord[0].xy);
+    gl_FragColor = pixel * gl_Color * tint;
+}
+```
+
+```python
+from doku2d import Color, ShaderMaterial
+
+material = ShaderMaterial('res://shaders/tint.frag')
+sprite.material = material
+material.set_shader_parameter('tint', Color(255, 140, 100))
+```
+
+Bir materyali `Sprite`, `AnimatedSprite`, `TileMap`, `CanvasGroup` veya başka
+bir çizilebilir nesnenin `material` alanına verebilirsin. Özel çizim kodunda
+`render(target, states)` ile gelen `states` değerini SFML çizim çağrısına aktar.
+`material = None` normal çizime döner. Aynı materyali paylaşan nesneler aynı
+parametreleri görür. Bağımsız parametreler için ayrı materyal oluştur.
+
+`game.world.material = material` efekti aydınlatmadan sonra tüm dünya
+katmanına uygular. Ayrı HUD katmanı normal kalır. `CanvasGroup.material`
+grup tint ve saydamlığı birleştirildikten sonra çalışır. Bu iki kullanım ek
+çizim yüzeyi gerektirir. UI açılır menüleri katman sonrası çizilir ve kendi
+kontrollerinin materyalini kullanır.
+
+Shader kodu SFML/OpenGL uyumlu GLSL kullanır. `u_texture` mevcut çizim
+dokusuna otomatik bağlanır. Başka bir sampler adı için `texture_uniform`
+verebilir, dokusuz shader için `texture_uniform=None` kullanabilirsin.
+`vertex='res://shaders/move.vert'` isteğe bağlıdır. Dosya yerine GLSL metni
+vermek için `ShaderMaterial.from_source(...)` kullan.

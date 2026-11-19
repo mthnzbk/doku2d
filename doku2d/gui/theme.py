@@ -117,7 +117,7 @@ def disk(target, states, center, radius, fill):
 
 
 def text_object(control, value, size=None):
-    return Text(control.font or control.theme.get_font(), str(value),
+    return Text(control.font or control.theme.get_font(), control.localize(value),
                 size or control.font_size)
 
 
@@ -142,6 +142,17 @@ def label(target, states, control, value, rect=None, *, align="left", valign="ce
 def texture(target, states, image, rect, region=None):
     if image is None:
         return
+    from ..rendering.atlas import AtlasRegion
+    if isinstance(image, AtlasRegion):
+        ax, ay, aw, ah = image.rect
+        if region is None:
+            region = image.rect
+        else:
+            x, y, width, height = region
+            if x < 0 or y < 0 or x+width > aw+1e-6 or y+height > ah+1e-6:
+                raise ValueError('UI crop must be inside its atlas region')
+            region = (ax+x, ay+y, width, height)
+        image = image.texture
     sprite = Sprite(image)
     if region is not None:
         x, y, width, height = region

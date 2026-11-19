@@ -27,7 +27,9 @@ class Entity(Object):
         self._game = None
         self._pending_game = None
         self._canvas = None
+        self._material = None
         self._scope = None
+        self._screen_blocks = None
         self._canvas_group = None
         self._position = Vector2(0, 0)
         self._rotation = 0.0
@@ -61,6 +63,15 @@ class Entity(Object):
 
     def _advance(self, dt):
         pass
+
+    @property
+    def material(self):
+        return self._material
+
+    @material.setter
+    def material(self, value):
+        from ..rendering.shader import checked_material
+        self._material = checked_material(value)
 
     @property
     def canvas(self):
@@ -146,6 +157,8 @@ class Entity(Object):
         self._process_mode = value
 
     def can_process(self):
+        if self._screen_blocks and any(notifier.game is self.game for notifier in self._screen_blocks):
+            return False
         paused = self.game is not None and self.game.paused
         return (self.process_mode == "always"
                 or self.process_mode == "when_paused" and paused

@@ -12,6 +12,7 @@ class Resources(Object):
         super().__init__()
         self._root=Path(root).resolve()
         self._textures={};self._fonts={};self._sounds={};self._maps={};self._json={};self._text={}
+        self._atlases = {}
     @property
     def root(self):return self._root
     def resolve(self,path):
@@ -55,6 +56,13 @@ class Resources(Object):
         path=self.resolve(path)
         if path not in self._json:self._json[path]=json.loads(self.get_text(path))
         return deepcopy(self._json[path])
+    def load_atlas(self, path):
+        from ..rendering.atlas import SpriteAtlas
+
+        path = self.resolve(path)
+        if path not in self._atlases:
+            self._atlases[path] = SpriteAtlas.from_file(path, resources=self)
+        return self._atlases[path]
     def preload(self,*paths):
         loaders={'.png':self.get_texture,'.jpg':self.get_texture,'.jpeg':self.get_texture,
                  '.bmp':self.get_texture,'.ttf':self.get_font,'.otf':self.get_font,
@@ -64,14 +72,19 @@ class Resources(Object):
         return self
     @property
     def cache_info(self):
-        return {name:len(getattr(self,'_'+name)) for name in ('textures','fonts','sounds','maps','json','text')}
+        return {name:len(getattr(self,'_'+name)) for name in ('textures','fonts','sounds','maps','json','text','atlases')}
     def unload(self,path):
         path=self.resolve(path)
+        unloaded_textures = []
         for key in tuple(self._textures):
-            if key[0]==path:del self._textures[key]
-        for cache in (self._fonts,self._sounds,self._maps,self._json,self._text):cache.pop(path,None)
+            if key[0] == path:
+                unloaded_textures.append(self._textures.pop(key))
+        for cache in (self._fonts,self._sounds,self._maps,self._json,self._text,self._atlases):cache.pop(path,None)
+        for key, atlas in tuple(self._atlases.items()):
+            if any(atlas.texture is texture for texture in unloaded_textures):
+                del self._atlases[key]
     def clear(self):
-        for cache in (self._textures,self._fonts,self._sounds,self._maps,self._json,self._text):cache.clear()
+        for cache in (self._textures,self._fonts,self._sounds,self._maps,self._json,self._text,self._atlases):cache.clear()
 
 
 Resource=Resources

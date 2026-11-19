@@ -1,5 +1,5 @@
 """Small TOML project configuration, resolved independently of the working directory."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import re
 import tomllib
@@ -24,6 +24,9 @@ class ProjectConfig:
     debug:bool=False
     debug_key:str|None="F3"
     persist_preferences:bool=False
+    locale:str='en'
+    fallback_locale:str='en'
+    catalogs:dict=field(default_factory=dict)
     @property
     def root(self):return self.file.parent
     @property
@@ -32,7 +35,8 @@ class ProjectConfig:
                     physics_fps=self.physics_fps,project_root=self.root,asset_root=self.assets,
                     save_dir=self.save_dir,app_id=self.app_id,window_size=self.window_size,
                     scale_mode=self.scale_mode,theme=self.theme,debug=self.debug,debug_key=self.debug_key,
-                    persist_preferences=self.persist_preferences)
+                    persist_preferences=self.persist_preferences,locale=self.locale,
+                    fallback_locale=self.fallback_locale,catalogs=self.catalogs)
     @classmethod
     def load(cls,path='doku2d.toml'):
         path=Path(path).resolve()
@@ -69,6 +73,24 @@ class ProjectConfig:
         persist_preferences=data.get('preferences',{}).get('persist',False)
         if not isinstance(persist_preferences,bool):
             raise ValueError('preferences.persist must be boolean')
+        localization=data.get('localization',{})
+        if not isinstance(localization,dict):
+            raise ValueError('localization must be a table')
+        locale=localization.get('locale','en')
+        fallback_locale=localization.get('fallback','en')
+        if any(not isinstance(value,str) or not value.strip() for value in (locale,fallback_locale)):
+            raise ValueError('localization.locale and localization.fallback must be nonempty strings')
+        catalogs={}
+        configured_catalogs=localization.get('catalogs',{})
+        if not isinstance(configured_catalogs,dict):
+            raise ValueError('localization.catalogs must be a table')
+        for language,name in configured_catalogs.items():
+            if not language.strip() or not isinstance(name,str) or not name:
+                raise ValueError('Each localization catalog needs a language and a file path')
+            catalog=(assets/name.removeprefix('res://')).resolve()
+            if not catalog.is_relative_to(assets) or catalog == assets:
+                raise ValueError('Localization catalogs must be inside the asset directory')
+            catalogs[language]=catalog
         logical_width=integer(window.get('width',game.get('window_width',960)),'window.width')
         logical_height=integer(window.get('height',game.get('window_height',540)),'window.height')
         scale_mode=window.get('scale_mode','fit')
@@ -82,4 +104,4 @@ class ProjectConfig:
                    integer(window.get('physics_fps',60),'window.physics_fps'),
                    local(storage,'storage.directory') if storage else None,window_size,scale_mode,
                    local(theme,'ui.theme') if theme else None,debug_enabled,
-                   None if debug_key is False else debug_key,persist_preferences)
+                   None if debug_key is False else debug_key,persist_preferences,locale,fallback_locale,catalogs)

@@ -250,6 +250,14 @@ class TileLayer(Entity):
 
     @property
     def tile_map(self): return self._tile_map
+
+    @property
+    def material(self):
+        return self._material if self._material is not None else (self.tile_map.material if self.tile_map else None)
+
+    @material.setter
+    def material(self, value):
+        Entity.material.fset(self, value)
     @property
     def cells(self): return MappingProxyType(self._cells)
     @property
@@ -447,10 +455,10 @@ class TileLayer(Entity):
         transform.translate((shift.x*(1-self.parallax.x),shift.y*(1-self.parallax.y)))
         transform.combine(states.transform)
         if self.kind == 'imagelayer':
-            self._render_image(target,transform)
+            self._render_image(target,transform,states.shader)
             return
         if self.kind == 'objectgroup':
-            self._render_objects(target,transform)
+            self._render_objects(target,transform,states.shader)
             return
         revision = (owner.render_order, tuple(owner._tile_size),
                     tuple((ts, ts._revision) for ts in owner.tilesets))
@@ -497,9 +505,9 @@ class TileLayer(Entity):
                     rows_in_view.setdefault(y, []).extend(runs)
         for y in sorted(rows_in_view, reverse=reverse_y):
             for texture, mesh in rows_in_view[y]:
-                target.draw(mesh, RenderStates(transform=transform, texture=texture))
+                target.draw(mesh, RenderStates(transform=transform, texture=texture, shader=states.shader))
 
-    def _render_image(self,target,transform):
+    def _render_image(self,target,transform,shader):
         if self._image is None: return
         if self._image_texture is None: self._image_texture = self.tile_map._resources.get_texture(self._image) if self.tile_map._resources else Texture.from_file(str(self._image))
         texture = self._image_texture
@@ -512,9 +520,9 @@ class TileLayer(Entity):
         for y in ys:
             for x in xs:
                 for vertex in quad(texture,(0,0,w,h),(x*w,y*h,w,h),TileCell(),tint): mesh.append(vertex)
-        target.draw(mesh,RenderStates(transform=transform,texture=texture))
+        target.draw(mesh,RenderStates(transform=transform,texture=texture,shader=shader))
 
-    def _render_objects(self,target,transform):
+    def _render_objects(self,target,transform,shader):
         objects = sorted(self.objects,key=lambda obj:obj.position[1]) if self.draw_order == 'topdown' else self.objects
         tint = Color(*self.tint[:3],round(self.tint[3]*self.opacity))
         for obj in objects:
@@ -530,7 +538,7 @@ class TileLayer(Entity):
             mesh = VertexArray(PrimitiveType.TRIANGLES)
             offset_x,offset_y = tileset.offset.x*w/region[2],tileset.offset.y*h/region[3]
             for vertex in quad(texture,region,(offset_x,-h+offset_y,w,h),obj.tile,tint): mesh.append(vertex)
-            target.draw(mesh,RenderStates(transform=local,texture=texture))
+            target.draw(mesh,RenderStates(transform=local,texture=texture,shader=shader))
 
 
 class TileMap(Entity):
@@ -613,7 +621,8 @@ class TileMap(Entity):
         if layers is not None:layers={layers} if isinstance(layers,str) else set(layers)
         if layers is not None and layers-set(self.layers):raise ValueError('Unknown collision layer name')
         for name,layer in self.layers.items():
-            selected=(layer.kind=='tilelayer' or layer.properties.get('collision_enabled',layer.properties.get('collision',False))) if layers is None else name in layers
+            marked = layer.properties.get('collision_enabled', layer.properties.get('collision', layer.properties.get('one_way', False)))
+            selected = (layer.kind == 'tilelayer' or marked) if layers is None else name in layers
             layer.collision_enabled=bool(selected and layer.properties.get('collision_enabled',layer.properties.get('collision',True)))
             layer.properties.setdefault('collision_layer',collision_layer)
             layer.properties.setdefault('collision_mask',collision_mask)
@@ -749,7 +758,7 @@ class TileMap(Entity):
             layer.kind,layer.position = item.kind,item.offset
             layer.parallax,layer.opacity,layer.visible,layer.tint = item.parallax,item.opacity,item.visible,item.tint
             layer.properties,layer.objects = dict(item.properties),item.objects
-            layer.collision_enabled=bool(layer.properties.get('collision_enabled',layer.properties.get('collision',False)))
+            layer.collision_enabled=bool(layer.properties.get('collision_enabled',layer.properties.get('collision',layer.properties.get('one_way',False))))
             layer._image = item.image
             layer.repeat_x,layer.repeat_y,layer.draw_order = item.repeat_x,item.repeat_y,item.draw_order
             layer._cells = dict(item.cells)

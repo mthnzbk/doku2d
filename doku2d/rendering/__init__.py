@@ -6,7 +6,11 @@ from .tilemap import TiledParser, MapData, MapObject, TileCell, TileLayer, TileS
 from .sprite import Sprite
 from .compositing import CanvasGroup, CanvasModulate, AmbientLight, DayNightCycle
 from .other import Marker
+from .shader import ShaderMaterial
+from .atlas import AtlasRegion, SpriteAtlas
+from .screen import ScreenNotifier
 
 __all__ = ["AutoTile", "Camera", "Light", "DirectionalLight", "PointLight", "LightOccluder",
            "Particles", "MapData", "MapObject", "TileCell", "TiledParser", "TileLayer", "TileSet", "TileMap",
-           "Sprite", "CanvasGroup", "CanvasModulate", "AmbientLight", "DayNightCycle", "Marker"]
+           "Sprite", "CanvasGroup", "CanvasModulate", "AmbientLight", "DayNightCycle", "Marker", "ShaderMaterial",
+           "AtlasRegion", "SpriteAtlas", "ScreenNotifier"]

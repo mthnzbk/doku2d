@@ -1,7 +1,8 @@
 from enum import Enum
+from math import ceil
 from sfml.system import Vector2
-from ..core import Entity, Signal
-from .theme import Theme, box
+from ..core import Entity, Signal, LocalizedText
+from .theme import Theme, box, text_object
 
 
 class Anchor(Enum):
@@ -89,7 +90,32 @@ class Control(Entity):
         if self.game._ui:
             self.game._ui.release(self)
 
+    @staticmethod
+    def _caption(value):
+        return value if isinstance(value, LocalizedText) else str(value)
+
+    def localize(self, value):
+        return self.game.localization.resolve(value) if self.game and isinstance(value, LocalizedText) else str(value)
+
+    def _fit_caption(self):
+        if not getattr(self, 'fit_text', False):
+            return
+        caption = self._caption_for_layout()
+        font = self.font or self.theme.get_font()
+        key = (caption, id(font), self.font_size)
+        if getattr(self, '_caption_measure', (None, None))[0] != key:
+            bounds = text_object(self, caption).local_bounds
+            self._caption_measure = (key, ceil(bounds.size.x))
+        self.size = (self._caption_measure[1] + 2*self.theme.padding + self._caption_width_extra, self.size.y)
+
+    _caption_width_extra = 0
+
+    def _caption_for_layout(self):
+        return self.text
+
     def arrange(self):
+        if self._layout is None:
+            self._fit_caption()
         if self.anchor is not None and self._layout is None and self.game is not None:
             x, y = self.anchor.value
             self.position = (self.game.size.x*x-self.size.x*x+self.offset.x,

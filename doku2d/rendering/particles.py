@@ -1,12 +1,28 @@
 """CPU particles with bounded pools, world/local coordinates and simple presets."""
 from dataclasses import dataclass
+from functools import lru_cache
+from itertools import chain
 from math import sin,cos,pi,sqrt,exp,hypot,isfinite,radians
 from pathlib import Path
 from random import Random
-from sfml.graphics import Color,Image,Texture,Sprite,CircleShape,RenderStates,BLEND_ADD,BLEND_ALPHA
+from sfml.graphics import (Color, Image, Texture, Sprite, CircleShape, RenderStates, RenderTexture,
+                           BLEND_ADD, BLEND_ALPHA, PrimitiveType, Vertex, VertexArray)
 from sfml.system import Vector2
 from ..core import Entity,Signal
 from ..animation.values import interpolate
+from .culling import ViewCuller
+
+
+@lru_cache(maxsize=1)
+def _particle_mask():
+    # Bake the same 12-sided outline once instead of tessellating it per particle.
+    surface = RenderTexture(64, 64)
+    surface.clear(Color(255, 255, 255, 0))
+    surface.draw(CircleShape(32, 12))
+    surface.display()
+    texture = Texture.from_image(surface.texture.to_image())
+    texture.smooth = True
+    return texture
 
 
 def positive(value,name,zero=False):
@@ -39,9 +55,11 @@ class _Particle:
 
 class Particles(Entity):
     finished=Signal()
+    cullable = True
     def __init__(self,name=None,*,position=(0,0),amount=64,lifetime=1,one_shot=False,emitting=True,seed=None):
         super().__init__(name)
         self._particles=[];self._texture=None;self._drawable=None;self._texture_path=None;self._resources=None
+        self._batch_mesh = None
         self._clock=0.0;self._emitted=0;self._notified=False;self._has_emitted=False
         self._emitting=bool(emitting);self._local_coords=False
         self._random=Random(seed);self._seed=seed
@@ -268,16 +286,68 @@ class Particles(Entity):
         for (a,c1),(b,c2) in zip(keys,keys[1:]):
             if t<=b:return interpolate(c1,c2,(t-a)/(b-a))
         return keys[-1][1]
-    def render(self,target,states):
+
+    def _visible_particles(self, target, states):
+        visible = None
+        if self.game is not None and self.game.culling and self.cullable and states.shader is None:
+            visible = ViewCuller(target.view).circles(states.transform if self.local_coords else None)
+        extent = sqrt(2) if self.texture is not None else 1
+        end_scale = self.end_scale - 1
+        for particle in self._particles:
+            t = particle.age / particle.lifetime
+            radius = particle.radius * (1 + end_scale*t)
+            if visible is None or visible(particle.position.x, particle.position.y, radius*extent):
+                yield particle, radius, t
+
+    def render(self, target, states):
+        if not self._particles:
+            return
+        visible = self._visible_particles(target, states)
+        first = next(visible, None)
+        if first is None:
+            return
+        visible = chain((first,), visible)
+        if (len(self._particles) == 1 or states.shader is not None
+                or (self.game is not None and not self.game.batching)):
+            self._render_individually(target, states, visible)
+            return
+        if self._batch_mesh is None:
+            self._batch_mesh = VertexArray(PrimitiveType.TRIANGLES_STRIP)
+        mesh = self._batch_mesh
+        mesh.clear()
+        texture = self.texture or _particle_mask()
+        width, height = texture.size
+        extent = max(width, height)
+        x, y = width/extent, height/extent
+        strip = ((-x, -y, 0, 0), (x, -y, width, 0), (-x, y, 0, height), (x, y, width, height))
+        previous = None
+        for particle, radius, t in visible:
+            angle = radians(particle.rotation)
+            c, s = radius*cos(angle), radius*sin(angle)
+            px, py = particle.position
+            tint = self._particle_color(t)
+            if tint.a == 0:
+                continue
+            for index, (x, y, u, v) in enumerate(strip):
+                vertex = Vertex((px+x*c-y*s, py+x*s+y*c), tint, (u, v))
+                if index == 0 and previous is not None:
+                    mesh.append(previous)
+                    mesh.append(vertex)
+                mesh.append(vertex)
+            previous = vertex
+        if len(mesh):
+            target.draw(mesh, RenderStates(texture=texture, blend_mode=BLEND_ADD if self.blend_mode == 'add' else BLEND_ALPHA,
+                                           transform=states.transform if self.local_coords else None))
+
+    def _render_individually(self,target,states,visible):
         if self._drawable is None:
             if self.texture:
                 self._drawable=Sprite(self.texture);self._drawable.origin=self.texture.size/2
             else:self._drawable=CircleShape(1,12);self._drawable.origin=(1,1)
         drawable=self._drawable
         draw_states=RenderStates(blend_mode=BLEND_ADD if self.blend_mode=='add' else BLEND_ALPHA,
-                                 transform=states.transform if self.local_coords else None)
-        for p in self._particles:
-            t=p.age/p.lifetime;size=p.radius*(1+(self.end_scale-1)*t)
+                                 transform=states.transform if self.local_coords else None, shader=states.shader)
+        for p, size, t in visible:
             tint=self._particle_color(t)
             drawable.position=p.position;drawable.rotation=p.rotation
             if self.texture:

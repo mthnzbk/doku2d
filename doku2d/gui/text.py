@@ -10,9 +10,10 @@ from .theme import box, label, measure, text_object, clipped
 
 
 class Label(Control):
-    def __init__(self, name=None, *, text=""):
+    def __init__(self, name=None, *, text="", fit_text=False):
         super().__init__(name)
-        self._text = str(text)
+        self._text = self._caption(text)
+        self.fit_text = bool(fit_text)
         self._uppercase = False
         self._horizontal_alignment = "left"
         self._vertical_alignment = "center"
@@ -21,17 +22,20 @@ class Label(Control):
 
     @property
     def text(self):
-        return self._text
+        return self.localize(self._text)
 
     @text.setter
     def text(self, value):
-        self._text = str(value)
+        self._text = self._caption(value)
 
     def render(self, target, states):
         self.clip_contents = self.clip_text
-        label(target, states, self, self.text.upper() if self.uppercase else self.text,
+        label(target, states, self, self._caption_for_layout(),
               align=self.horizontal_alignment, valign=self.vertical_alignment)
 
+    def _caption_for_layout(self):
+        text = self.text
+        return text.upper() if self.uppercase else text
 
     @property
     def uppercase(self):
@@ -74,7 +78,7 @@ class RichLabel(Control):
 
     def __init__(self, name=None, *, text=""):
         super().__init__(name)
-        self._text = str(text)
+        self._text = self._caption(text)
         self._bbcode_enabled = False
         self._links = []
         self._hover_meta = None
@@ -86,11 +90,11 @@ class RichLabel(Control):
 
     @property
     def text(self):
-        return self._text
+        return self.localize(self._text)
 
     @text.setter
     def text(self, value):
-        self._text = str(value)
+        self._text = self._caption(value)
         self._dirty = True
         self._layout_cache = None
 
@@ -566,11 +570,11 @@ class _Editor(Control):
 
     @property
     def placeholder(self):
-        return self._placeholder
+        return self.localize(self._placeholder)
 
     @placeholder.setter
     def placeholder(self, value):
-        self._placeholder = value
+        self._placeholder = self._caption(value)
 
     @property
     def alignment(self):
@@ -695,11 +699,11 @@ class TextEdit(_Editor):
 
     @property
     def placeholder(self):
-        return self._placeholder
+        return self.localize(self._placeholder)
 
     @placeholder.setter
     def placeholder(self, value):
-        self._placeholder = value
+        self._placeholder = self._caption(value)
 
     @property
     def editable(self):
@@ -851,4 +855,4 @@ class TextEdit(_Editor):
                 transform = Transform()
                 transform.combine(states.transform)
                 transform.translate(scrollbar.position)
-                scrollbar.render(target,RenderStates(transform=transform))
+                scrollbar.render(target,RenderStates(transform=transform, shader=states.shader))

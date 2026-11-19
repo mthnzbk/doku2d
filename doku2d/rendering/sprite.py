@@ -2,9 +2,12 @@ from pathlib import Path
 from sfml.graphics import Sprite as SFMLSprite, Texture, Rect, RenderStates
 from sfml.system import Vector2
 from ..core import Entity, Signal
+from .atlas import AtlasRegion
 
 
 class Sprite(Entity):
+    batchable = True
+    cullable = True
     frame_changed = Signal()
     texture_changed = Signal()
 
@@ -13,7 +16,9 @@ class Sprite(Entity):
         self._resources=resources
         self._texture_path=None
         self._texture = None
+        self._atlas_region = None
         self._sprite = None
+        self._batch_geometry = None
         self._offset = Vector2(0, 0)
         self._centered = True
         self._flip_h = False
@@ -32,16 +37,26 @@ class Sprite(Entity):
 
     @texture.setter
     def texture(self, value):
+        region = value if isinstance(value, AtlasRegion) else None
+        if region is not None:
+            value = region.texture
         if isinstance(value,(str,Path)):
             self._texture_path=value
             resources=self._resources or (self.game.resources if self.game else None)
             value=resources.get_texture(value) if resources else None
         else:self._texture_path=None
         if value is not None and not isinstance(value, Texture):
-            raise TypeError("texture must be a Texture, file path or None")
+            raise TypeError("texture must be a Texture, AtlasRegion, file path or None")
+        if value is not self._texture:
+            self._sprite = SFMLSprite(value) if value is not None else None
         self._texture = value
-        self._sprite = SFMLSprite(value) if value is not None else None
+        self._atlas_region = region
+        self._batch_geometry = None
         self.texture_changed.emit()
+
+    @property
+    def atlas_region(self):
+        return self._atlas_region
 
     def _bind_resources(self,resources):
         self._resources=resources
@@ -149,16 +164,40 @@ class Sprite(Entity):
             raise ValueError("Region dimensions cannot be negative")
         self._region_rect = [x, y, width, height]
 
+    def _frame_rect(self):
+        if self.atlas_region is not None:
+            return self.atlas_region.rect
+        if self.region:
+            return self._region_rect
+        texture_size = self.texture.size
+        width, height = texture_size.x // self.hframes, texture_size.y // self.vframes
+        return self.frame % self.hframes * width, self.frame // self.hframes * height, width, height
+
+    def _batch_sprite(self):
+        return self if type(self).render is Sprite.render else None
+
+    def _batch_quad(self):
+        key = (self.texture, self._frame, self._hframes, self._vframes,
+               self._atlas_region, tuple(self._region_rect) if self._region else None, self._centered,
+               self._flip_h, self._flip_v, self._offset.x, self._offset.y)
+        if self._batch_geometry is not None and key == self._batch_geometry[0]:
+            return self._batch_geometry[1]
+        x, y, width, height = self._frame_rect()
+        ox, oy = (width/2, height/2) if self.centered else (0, 0)
+        x, y, width, height = map(int, (x, y, width, height))
+        sx, sy = (-1 if self.flip_h else 1), (-1 if self.flip_v else 1)
+        left, top = self._offset.x - sx*ox, self._offset.y - sy*oy
+        right, bottom = left + sx*width, top + sy*height
+        quad = (((left, top), (right, top), (left, bottom), (right, bottom)),
+                ((x, y), (x+width, y), (x, y+height), (x+width, y+height)))
+        self._batch_geometry = (key, quad)
+        return quad
+
     def render(self, target, states):
         if self._sprite is None and self._texture_path is not None:self._load_texture()
         if self._sprite is None:
             return
-        if self.region:
-            x, y, width, height = self.region_rect
-        else:
-            width = self.texture.size.x // self.hframes
-            height = self.texture.size.y // self.vframes
-            x, y = self.frame_coords.x * width, self.frame_coords.y * height
+        x, y, width, height = self._frame_rect()
         self._sprite.texture_rectangle = Rect((int(x), int(y)), (int(width), int(height)))
         self._sprite.origin = (width / 2, height / 2) if self.centered else (0, 0)
         self._sprite.scale = (-1 if self.flip_h else 1, -1 if self.flip_v else 1)

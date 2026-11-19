@@ -12,9 +12,10 @@ class BaseButton(Control):
     button_up = Signal()
     button_down = Signal()
 
-    def __init__(self, name=None, *, text=""):
+    def __init__(self, name=None, *, text="", fit_text=False):
         super().__init__(name)
-        self._text = str(text)
+        self._text = self._caption(text)
+        self.fit_text = bool(fit_text)
         self._toggle_mode = False
         self._button_pressed = False
         self._text_alignment = "center"
@@ -60,11 +61,11 @@ class BaseButton(Control):
 
     @property
     def text(self):
-        return self._text
+        return self.localize(self._text)
 
     @text.setter
     def text(self, value):
-        self._text = str(value)
+        self._text = self._caption(value)
 
     @property
     def button_pressed(self):
@@ -119,6 +120,10 @@ class BaseButton(Control):
         self._hover_blend += (float(self.hovered)-self._hover_blend)*speed
         self._toggle_blend += (float(self.button_pressed)-self._toggle_blend)*speed
 
+    @property
+    def _caption_width_extra(self):
+        return max(0, min(self.size.y-12, 24)) + 8 if self.icon is not None else 0
+
     def render(self, target, states):
         theme = self.theme
         fill = theme.disabled if self.disabled else (
@@ -143,8 +148,10 @@ class Button(BaseButton):
 
 
 class CheckBox(BaseButton):
-    def __init__(self, name=None, *, text=""):
-        super().__init__(name, text=text)
+    _caption_width_extra = 32
+
+    def __init__(self, name=None, *, text="", fit_text=False):
+        super().__init__(name, text=text, fit_text=fit_text)
         self._toggle_mode = True
         self.show_focus = False
 
@@ -173,6 +180,8 @@ class CheckBox(BaseButton):
 
 
 class CheckButton(CheckBox):
+    _caption_width_extra = 52
+
     def render(self, target, states):
         y = (self.size.y-22)/2
         box(target, states, (1, y, 40, 22), mix(self.theme.border,self.theme.active,self._toggle_blend), radius=11)

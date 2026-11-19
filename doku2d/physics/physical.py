@@ -283,7 +283,15 @@ class PhysicsBody(Entity):
             transform = Transform()
             transform.combine(states.transform)
             transform.combine(self.sprite.transform)
-            self.sprite.render(target,RenderStates(transform=transform))
+            material = self.sprite.material
+            shader = material._resolve(self.game.resources if self.game else None) if material else states.shader
+            if self.game is not None and self.game.culling and shader is None and getattr(self.sprite, 'cullable', False):
+                from ..rendering.batching import sprite_source
+                from ..rendering.culling import ViewCuller, transform_affine
+                visual = sprite_source(self.sprite)
+                if visual is not None and not ViewCuller(target.view).rectangle(visual._batch_quad(), transform_affine(transform)):
+                    return
+            self.sprite.render(target,RenderStates(transform=transform, shader=shader))
             return
         if self.color is None:
             return

@@ -17,6 +17,8 @@ class DebugOverlay:
         self._chunks = {}
         self._chunk_count = 0
         self._font = None
+        self._counting_draws = False
+        self._working_draw_calls = self._last_draw_calls = 0
         self._reset_profile()
         self.enabled = enabled
         self.key = key
@@ -35,6 +37,8 @@ class DebugOverlay:
         self._enabled = bool(value)
         if not self.enabled:
             self._visible = self._held = False
+            self._counting_draws = False
+            self._working_draw_calls = self._last_draw_calls = 0
             self._begin_frame()
             self._reset_profile()
 
@@ -93,6 +97,11 @@ class DebugOverlay:
     @property
     def path_queries(self):
         return self._last_queries
+
+    @property
+    def draw_calls(self):
+        """Draw submissions to game-managed targets in the last frame."""
+        return self._last_draw_calls
 
     def _reset_profile(self):
         self._working_profile = dict.fromkeys(self._profile_sections, 0.0)
@@ -219,7 +228,8 @@ class DebugOverlay:
             self._font = Theme(resources=self._game.resources).get_font()
         target.view = self._game._pixel_view(self._game.size)
         lines = [f'DEBUG  {self.fps:.0f} FPS  {self.frame_ms:.1f} ms',
-                 f'Objects: {visible_count}/{len(self._game.objects)}  Tile chunks: {self.tile_chunks}']
+                 f'Objects: {visible_count}/{len(self._game.objects)}  Tile chunks: {self.tile_chunks}',
+                 f'Draw calls: {self.draw_calls}']
         if self.show_profile:
             times = self._last_profile
             lines += [f'Physics: {times["physics"]:.2f} ms  Update: {times["update"]:.2f} ms',

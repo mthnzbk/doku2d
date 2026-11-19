@@ -96,6 +96,10 @@ class Box(Layout):
         super().arrange()
         visible = [(control,expand) for control,expand in self._items if control.visible]
         if not visible: return
+        if not self.vertical:
+            for control, expand in visible:
+                if not expand:
+                    control._fit_caption()
         x,y,width,height = self.content_rect()
         available = height if self.vertical else width
         base = sum((control.min_size.y if self.vertical else control.min_size.x) if expand

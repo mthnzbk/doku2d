@@ -1,10 +1,11 @@
 """Explicit visual composition and canvas-wide ambient color/time of day."""
 from math import isfinite
 from bisect import bisect_right
-from sfml.graphics import Color,RenderTexture,Shader,Sprite,RenderStates
+from sfml.graphics import BLEND_NONE, Color, Shader
 from ..core import Entity,Signal
 from ..animation.values import interpolate
 from .light import color
+from .shader import draw_effect
 
 GROUP_SHADER=b'''
 uniform sampler2D source;
@@ -26,6 +27,7 @@ class CanvasGroup(Entity):
     def __init__(self,name=None,*,canvas=None,opacity=1,color=Color.WHITE):
         super().__init__(name)
         self._members=[];self._surface=None;self._shader=None
+        self._material_surface = None
         self._opacity=1.;self._color=Color.WHITE
         self.canvas=canvas;self.opacity=opacity;self.color=color
     @property
@@ -44,7 +46,7 @@ class CanvasGroup(Entity):
         from ..core.singleton import instantiate
         entity=instantiate(source)
         if not isinstance(entity,Entity):raise TypeError('Group expects an Entity, class or factory')
-        if any(getattr(entity,flag,False) for flag in ('_is_canvas_group','_is_physics_body','_is_light','_is_occluder','_is_canvas_modulate','_is_audio_player')) or hasattr(entity,'_sync_collisions') or getattr(entity,'tile_map',None) is not None:
+        if any(getattr(entity,flag,False) for flag in ('_is_canvas_group','_is_physics_body','_is_light','_is_occluder','_is_canvas_modulate','_is_audio_player','_is_screen_notifier')) or hasattr(entity,'_sync_collisions') or getattr(entity,'tile_map',None) is not None:
             raise TypeError('CanvasGroup accepts independent visual entities; keep physics, maps, lights and other groups outside it')
         if entity is self or entity._canvas_group is not None:raise ValueError('Object already belongs to a visual group')
         owner=entity.game or entity._pending_game
@@ -76,23 +78,30 @@ class CanvasGroup(Entity):
             for member in self.members:
                 if member.game is self.game or member._pending_game is self.game:self.game.remove(member)
         self._surface=None;self._shader=None
+        self._material_surface = None
     def render(self,target,states):
         if self.opacity<=0:return
         size=tuple(map(int,target.size))
-        if self._surface is None or tuple(self._surface.size)!=size:self._surface=RenderTexture(*size)
+        if self._surface is None or tuple(self._surface.size)!=size:self._surface=self.game.create_render_texture(size)
         if self._shader is None:
             if not Shader.is_available():raise RuntimeError('CanvasGroup requires OpenGL shader support')
             self._shader=Shader.from_memory(fragment=GROUP_SHADER)
         surface=self._surface;surface.reset_GL_states();surface.clear(Color.TRANSPARENT)
         canvas=self.canvas or self.game.world
         members=sorted((obj for obj in self.members if obj.game is self.game and obj.visible and obj not in self.game._removing),key=lambda obj:obj.z_index)
-        self.game._draw_canvas_objects(surface,members,canvas)
+        self.game._draw_canvas_objects(surface,members,canvas,batch_owner=self)
         surface.display()
         self._shader.set_uniform('source',surface.texture);self._shader.set_uniform('tint',self.color)
         self._shader.set_uniform('opacity',self.opacity)
-        old_view=target.view;target.reset_GL_states();target.view=self.game._pixel_view(size)
-        try:target.draw(Sprite(surface.texture),RenderStates(shader=self._shader))
-        finally:target.view=old_view
+        if states.shader is None:
+            draw_effect(self.game, target, surface.texture, self._shader)
+        else:
+            if self._material_surface is None or tuple(self._material_surface.size) != size:
+                self._material_surface = self.game.create_render_texture(size)
+            processed = self._material_surface
+            draw_effect(self.game, processed, surface.texture, self._shader, blend_mode=BLEND_NONE)
+            processed.display()
+            draw_effect(self.game, target, processed.texture, states.shader)
 
 
 class AmbientLight(Entity):
