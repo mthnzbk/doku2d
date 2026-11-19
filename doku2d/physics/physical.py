@@ -16,7 +16,7 @@ class PhysicsBody(Entity):
     _body_kind = pymunk.Body.DYNAMIC
 
     def __init__(self, name=None, *, position=(0,0), size=(32,32), radius=None,
-                 shape=None, color=None, mass=1):
+                 shape=None, color=None, mass=1, one_way=False):
         super().__init__(name)
         self._native_body = None
         self._native_shape = None
@@ -42,7 +42,19 @@ class PhysicsBody(Entity):
         self._sprite = None
         self._contacts = []
         self._overlaps = set()
+        self.one_way = one_way
         self.position = position
+
+    @property
+    def one_way(self):
+        """Allow passage from underneath a static or moving platform."""
+        return self._one_way
+
+    @one_way.setter
+    def one_way(self, value):
+        if value and (self._is_area or self._body_kind == pymunk.Body.DYNAMIC):
+            raise ValueError('One-way platforms must be StaticBody or AnimatableBody objects')
+        self._one_way = bool(value)
 
     @property
     def collision_object(self):return self._collision_object

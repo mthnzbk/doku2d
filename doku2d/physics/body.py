@@ -44,6 +44,7 @@ class CharacterBody(PhysicsBody):
         self._motor_active=False
         self._motor_velocity=Vector2(0,0)
         self._navigation = None
+        self._drop_remaining = 0.0
         self.motion_mode=motion_mode
 
     @property
@@ -147,6 +148,21 @@ class CharacterBody(PhysicsBody):
         self._floor_hit=None
         self._contacts.clear()
         self._jump_requested=False
+        self._drop_remaining = 0.0
+
+    def drop_through(self, duration=0.2):
+        """Release a one-way floor and ignore one-way surfaces briefly."""
+        if not isfinite(duration) or duration <= 0:
+            raise ValueError('Drop duration must be positive and finite')
+        if not self.is_on_floor() or not self._floor_hit.collider.one_way:
+            return False
+        self._drop_remaining = float(duration)
+        self._floor_hit = None
+        self._contacts[:] = [hit for hit in self._contacts if not hit.collider.one_way]
+        self._motion_contacts = tuple(hit for hit in self._motion_contacts if not hit.collider.one_way)
+        if dot(self.velocity, self.up_direction) > 0:
+            self.velocity -= self.up_direction * dot(self.velocity, self.up_direction)
+        return True
 
     def jump(self,speed=360):
         speed=number(speed,'Jump speed')

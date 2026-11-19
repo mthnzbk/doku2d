@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from math import radians, degrees, exp, ceil, hypot, isfinite
+from math import radians, degrees, exp, ceil, cos, hypot, isfinite, sin
 import pymunk
 from ..core.entity import Entity
 from sfml.system import Vector2
@@ -22,7 +22,11 @@ class PhysicsWorld:
         self._space.iterations = 20
         self._shapes = {}
         self._bodies = set()
-        self._space.on_collision(None,None,begin=self._begin,post_solve=self._contact,separate=self._separate)
+        self._one_way_pairs = {}
+        self._has_one_way = False
+        self._substep = 0.0
+        self._space.on_collision(None, None, begin=self._begin, pre_solve=self._pre_solve,
+                                 post_solve=self._contact, separate=self._separate)
 
     @property
     def gravity(self):
@@ -120,12 +124,53 @@ class PhysicsWorld:
         first,second = self._pair(arbiter)
         if first is None or second is None or first._is_area or second._is_area:
             return
-        self._emit(first,"body_entered",second)
-        self._emit(second,"body_entered",first)
+        if not (first.one_way or second.one_way):
+            self._emit(first,"body_entered",second)
+            self._emit(second,"body_entered",first)
+
+    @staticmethod
+    def _one_way_up(platform):
+        angle = platform._native_body.angle
+        return Vector2(sin(angle), -cos(angle))
+
+    def _pre_solve(self, arbiter, space, data):
+        if not self._has_one_way:
+            return
+        first, second = self._pair(arbiter)
+        if first is None or second is None or first._is_area or second._is_area:
+            return
+        if not (first.one_way or second.one_way):
+            return
+        platform, mover = (first, second) if first.one_way else (second, first)
+        key = frozenset((platform, mover))
+        previous = self._one_way_pairs.get(key)
+        normal = arbiter.normal if first is platform else -arbiter.normal
+        up = self._one_way_up(platform)
+        allowed = previous is not False and not getattr(mover, '_drop_remaining', 0)
+        allowed = allowed and normal.x*up.x + normal.y*up.y >= 0.5
+        if allowed and previous is None:
+            points = arbiter.contact_point_set.points
+            if points:
+                point = points[0].point_a if first is platform else points[0].point_b
+                velocity = mover._native_body.velocity_at_world_point(point) - platform._native_body.velocity_at_world_point(point)
+                speed = velocity.x*normal.x + velocity.y*normal.y
+                depth = min(contact.distance for contact in points)
+                allowed = speed <= 0.01 and depth - min(speed, 0)*self._substep >= -0.5
+        arbiter.process_collision = allowed
+        self._one_way_pairs[key] = allowed
+        if previous is None and allowed:
+            self._emit(first, 'body_entered', second)
+            self._emit(second, 'body_entered', first)
+        elif previous is True and not allowed:
+            self._emit(first, 'body_exited', second)
+            self._emit(second, 'body_exited', first)
 
     def _separate(self, arbiter, space, data):
         first,second = self._pair(arbiter)
         if first is None or second is None or first._is_area or second._is_area:
+            return
+        previous = self._one_way_pairs.pop(frozenset((first, second)), None)
+        if previous is False or previous is None and (first.one_way or second.one_way):
             return
         self._emit(first,"body_exited",second)
         self._emit(second,"body_exited",first)
@@ -143,6 +188,7 @@ class PhysicsWorld:
     def step(self, dt):
         if not isfinite(dt) or dt<=0:raise ValueError('Physics delta must be positive and finite')
         entities=tuple(self._bodies)
+        self._has_one_way = any(entity.one_way for entity in entities)
         characters=[entity for entity in entities if getattr(entity,'_is_character',False)]
         driven=[]
         applied={entity:(entity._native_body.force,entity._native_body.torque) for entity in entities}
@@ -180,6 +226,7 @@ class PhysicsWorld:
         displacement=max((hypot(*entity._native_body.velocity)*dt for entity in entities),default=0)
         count=max(4,min(64,ceil(displacement/max(.5,smallest*.25))))
         substep=dt/count
+        self._substep = substep
         for _ in range(count):
             for entity in entities:
                 body=entity._native_body
@@ -202,7 +249,9 @@ class PhysicsWorld:
             entity._angular_velocity=degrees(body.angular_velocity)
             entity._last_step_position=entity.position
             entity._last_step_rotation=body.angle
-        for entity in characters:entity._finish_motion(dt)
+        for entity in characters:
+            entity._finish_motion(dt)
+            entity._drop_remaining = max(0.0, entity._drop_remaining-dt)
         self._update_areas()
 
     def floor_probe(self,entity,distance):
@@ -227,6 +276,12 @@ class PhysicsWorld:
                 if other is None or other is entity or other._is_area or other in self.game._removing:continue
                 collision=Collision(other,Vector2(*hit.normal),Vector2(*hit.point),hit.alpha,
                                     dot(foot-Vector2(*hit.point),up))
+                if other.one_way:
+                    same_floor = entity.is_on_floor() and entity._floor_hit.collider is other
+                    if (entity._drop_remaining or self._one_way_pairs.get(frozenset((entity, other))) is False
+                            or dot(collision.normal, self._one_way_up(other)) < 0.5
+                            or not same_floor and dot(entity.velocity - Vector2(*other._platform_velocity), collision.normal) > 0.01):
+                        continue
                 if entity._floor(collision) and -.75<=collision.distance<=distance+entity.safe_margin:
                     candidates.append(collision)
         return min(candidates,key=lambda hit:hit.distance,default=None)

@@ -69,7 +69,7 @@ class TileCollisions:
         for name in tuple(self._generated):self._remove(name)
 
     def _settings(self,layer,*sources):
-        result={'collision_layer':1,'collision_mask':0xffffffff,'friction':.7,'elasticity':0}
+        result={'collision_layer':1,'collision_mask':0xffffffff,'friction':.7,'elasticity':0,'one_way':False}
         for source in (layer.properties,*sources):
             for key in result:
                 if key in source:result[key]=source[key]
@@ -132,8 +132,8 @@ class TileCollisions:
             prop=properties(tile)
             if prop.get('collision_enabled',True) is False:continue
             objects=tile.get('objectgroup',{}).get('objects',[])
-            solid=layer.properties.get('collision_mode')=='solid' or prop.get('solid',False)
             settings=self._settings(layer,prop)
+            solid=layer.properties.get('collision_mode')=='solid' or prop.get('solid',False) or settings['one_way']
             if solid and not objects:
                 solid_rows.setdefault((y,tuple(settings.items())),[]).append(x)
                 continue

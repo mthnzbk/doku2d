@@ -247,3 +247,35 @@ Animasyon haritanın ortak zamanını kullanır: komşu eklemek, silmek veya yen
 hücre boyamak animasyonu başa döndürmez. Oyun durakladığında harita animasyonu
 da durur. Animasyonlu autotile da normal tile gibi çarpışma metadata'sı taşıyabilir;
 çarpışma bağlantı varyantı değişince yenilenir, görsel kare değişiminde yeniden kurulmaz.
+## Tek yönlü platformlar
+
+```python
+from doku2d import StaticBody
+
+game.add(StaticBody(position=(320, 160), size=(144, 12), one_way=True))
+```
+
+`one_way=True` üst yüzeyi destek olarak kullanır. Karakter aşağıdan veya
+yandan geçebilir. Hareketli yüzey için aynı seçeneği `AnimatableBody` üzerinde
+kullanabilirsin.
+
+Bir `grounded` karakterin fizik güncellemesinde aşağı ve zıpla girdilerini
+`drop_through()` ile bağlayabilirsin:
+
+```python
+if self.input.is_action_just_pressed('jump'):
+    if not (self.input.is_action_pressed('move_down') and self.drop_through()):
+        self.jump()
+```
+
+`drop_through()` yalnızca karakter tek yönlü bir yüzeyde duruyorsa `True`
+döner. Varsayılan olarak 0,2 fizik saniyesi boyunca tek yönlü yüzeyleri
+yoksayar. `duration` ile süreyi değiştirebilirsin. Normal zeminler bu sırada
+da çarpışmaya devam eder.
+
+Tiled’da bir nesne katmanına, çarpışma nesnesine veya karoya boolean
+`one_way=true` ekle. Tek bir nesneyi işaretliyorsan nesne katmanında
+`collision=true` kullan. Katmanın tamamı tek yönlüyse katmana `one_way=true`
+vermen yeterlidir. Aynı katmandaki bir nesnenin `one_way=false` değeri katman
+ayarını geçersiz kılar. Çarpışma geometrisi olmayan işaretli karoların üst
+kenarı platform yüzeyi olur.
