@@ -64,3 +64,10 @@ paket üstünde motorun test takımını çalıştırmak için `--tests` kullan�
 
 Grafik oturumu bulunmayan bir Ubuntu çalıştırıcısında `xvfb` ve `xauth` kurup
 doğrulama komutunun başına `xvfb-run -a` ekle. [Sürüm notları](../CHANGELOG.md)
+
+## PyPI yayımlama
+
+Yayımlama iş akışını `v<version>` biçimindeki Git etiketi başlatır. Örneğin
+`v1.0.0rc1` etiketi, `pyproject.toml` içinde `1.0.0rc1` sürümünün bulunduğu
+commit'i göstermelidir. Etiketle paket sürümü farklıysa derleme başlamaz.
+GitHub Release açıklaması ayrıca yayımlanabilir.
