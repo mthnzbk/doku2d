@@ -411,9 +411,10 @@ class GuiTests(unittest.TestCase):
         target=RenderTexture(640,480)
         for name in gui.__all__:
             cls=getattr(gui,name)
-            if name in ("Anchor","Theme","Item"):continue
+            if not issubclass(cls, gui.Control):
+                continue
             with self.subTest(name=name):
-                control=self.game.add(cls())
+                control=self.game.add(cls('interact') if cls is gui.InputHint else cls())
                 self.game.render(target)
                 self.game.remove(control)
 

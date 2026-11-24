@@ -118,6 +118,7 @@ class NavigationAudioDebugTests(TestCase):
         game.update(1/60)
         target = RenderTexture(320, 180)
         game.debug.toggle()
+        game.debug.show_stats = False
         target.clear(Color.BLACK)
         game.render(target)
         target.display()

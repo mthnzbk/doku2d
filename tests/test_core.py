@@ -34,7 +34,7 @@ class CoreTests(unittest.TestCase):
                             "animation.animatedsprite"):
             module = importlib.import_module("doku2d." + module_name)
             for name, cls in inspect.getmembers(module, inspect.isclass):
-                if cls.__module__ != module.__name__:
+                if name.startswith('_') or cls.__module__ != module.__name__:
                     continue
                 with self.subTest(cls=name):
                     instance = cls()

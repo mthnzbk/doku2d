@@ -250,7 +250,7 @@ class DebugOverlay:
                  f'Objects: {visible_count}/{len(self._game.objects)}  Tile chunks: {self.tile_chunks}',
                  f'Draw calls: {self.draw_calls}']
         if self.key != Keyboard.F4:
-            lines.append('F4: Developer console')
+            lines[2] += '  F4: Console'
         if self.show_profile:
             times = self._last_profile
             lines += [f'Physics: {times["physics"]:.2f} ms  Update: {times["update"]:.2f} ms',
