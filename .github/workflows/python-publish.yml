@@ -9,7 +9,13 @@ permissions:
   contents: read
 
 jobs:
+  release-verify:
+    uses: ./.github/workflows/verify.yml
+    with:
+      native: true
+
   release-build:
+    needs: release-verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
