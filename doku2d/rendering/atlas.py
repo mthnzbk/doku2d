@@ -81,6 +81,11 @@ class SpriteAtlas(Mapping):
     @classmethod
     def pack(cls, images, *, resources=None, max_size=2048, padding=1):
         """Pack a mapping of names to Images or PNG paths into one texture."""
+        combined, frames = cls._pack_image(images, resources=resources, max_size=max_size, padding=padding)
+        return cls(Texture.from_image(combined), frames)
+
+    @staticmethod
+    def _pack_image(images, *, resources=None, max_size=2048, padding=1):
         if type(max_size) is not int or max_size <= 0 or type(padding) is not int or padding < 0:
             raise ValueError('Atlas max_size must be positive and padding nonnegative')
         if not images:
@@ -117,7 +122,7 @@ class SpriteAtlas(Mapping):
         combined = Image.create(used_width, height, Color.TRANSPARENT)
         for _, source, (x, y, _, _) in slots:
             combined.blit(source, (x, y))
-        return cls(Texture.from_image(combined), {name: rect for name, _, rect in slots})
+        return combined, {name: rect for name, _, rect in slots}
 
 
 __all__ = ['AtlasRegion', 'SpriteAtlas']

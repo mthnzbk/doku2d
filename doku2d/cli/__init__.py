@@ -118,17 +118,70 @@ def build_project(project='.'):
     return binary
 
 
+def build_atlas(directory, output=None, *, max_size=2048, padding=1):
+    """Pack a PNG directory into an atlas JSON and its companion image."""
+    from ..rendering.atlas import SpriteAtlas
+
+    directory = Path(directory).resolve()
+    if not directory.is_dir():
+        raise NotADirectoryError(directory)
+    output = Path(output or directory / 'atlas.json').resolve().with_suffix('.json')
+    image = output.with_suffix('.png')
+    if output.exists() or image.exists():
+        if not output.is_file():
+            raise FileExistsError(f'Atlas image would overwrite an existing file: {image}')
+        previous_data = json.loads(output.read_text(encoding='utf-8'))
+        if (not isinstance(previous_data, dict) or previous_data.get('image') != image.name
+                or not isinstance(previous_data.get('frames'), dict)):
+            raise FileExistsError(f'Output is not a previous atlas: {output}')
+    sources = {}
+    for path in sorted(directory.rglob('*')):
+        if path.is_file() and path.suffix.casefold() == '.png' and path.resolve() != image:
+            name = path.relative_to(directory).with_suffix('').as_posix()
+            if name in sources:
+                raise ValueError(f'Duplicate atlas frame name: {name}')
+            sources[name] = path
+    pixels, frames = SpriteAtlas._pack_image(sources, max_size=max_size, padding=padding)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=output.parent) as directory:
+        temporary = Path(directory)
+        pixels.to_file(str(temporary / image.name))
+        (temporary / output.name).write_text(json.dumps({'image': image.name, 'frames': frames},
+                                                       ensure_ascii=False, indent=2), encoding='utf-8')
+        previous_image = temporary / 'previous-image'
+        if image.is_file():
+            shutil.copyfile(image, previous_image)
+        (temporary / image.name).replace(image)
+        try:
+            (temporary / output.name).replace(output)
+        except OSError:
+            if previous_image.exists():
+                previous_image.replace(image)
+            else:
+                image.unlink()
+            raise
+    return output
+
+
 def main(argv=None):
-    parser=argparse.ArgumentParser(description='Doku2D project tools')
+    parser=argparse.ArgumentParser(prog='doku2d', description='Doku2D project tools')
     commands=parser.add_subparsers(dest='command',required=True)
     create=commands.add_parser('create',help='Create a playable starter project');create.add_argument('directory')
     run=commands.add_parser('run',help='Run a project');run.add_argument('--project',default='.');run.add_argument('--frames',type=int)
     build = commands.add_parser('build', help='Compile a standalone application with Nuitka')
     build.add_argument('--project', default='.')
+    atlas = commands.add_parser('atlas', help='Pack PNG files into a sprite atlas')
+    atlas.add_argument('directory')
+    atlas.add_argument('--output')
+    atlas.add_argument('--max-size', type=int, default=2048)
+    atlas.add_argument('--padding', type=int, default=1)
     args=parser.parse_args(argv)
     try:
         if args.command=='create':print(create_project(args.directory));return 0
         if args.command=='run':return run_project(args.project,arguments=['--frames',str(args.frames)] if args.frames is not None else [])
+        if args.command == 'atlas':
+            print(build_atlas(args.directory, args.output, max_size=args.max_size, padding=args.padding))
+            return 0
         print(build_project(args.project))
         return 0
     except (OSError,ValueError,RuntimeError,subprocess.CalledProcessError) as error:
