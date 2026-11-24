@@ -50,6 +50,7 @@ Galeride Gece ve Kum temaları aynı kontroller üzerinde denenebilir.
 - [Proje araçları ve paketleme](doc/project.md)
 - [API temizliği ve geçiş notları](doc/api.md)
 - [GUI](doc/gui.md)
+- [Diyalog ağacı ve konuşma arayüzü](doc/dialogue.md)
 - [Girdi, sprite animasyonu ve temel fizik](doc/gameplay.md)
 - [TileMap, Tiled, kamera ve ses](doc/world.md)
 - [Platform ve autotile](doc/platform.md)

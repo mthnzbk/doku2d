@@ -1,5 +1,23 @@
 # Sürüm notları
 
+## 1.0.0rc2
+
+- Diyalog dosyaları, koşullu ve süreli seçimler, oyuncu girişi, ortak alt
+  konuşmalar, kayıt ve konuşma geçmişi. Yerelleştirme, portreler, ses,
+  metin efektleri ve karaktere bağlı konuşma balonları.
+- Diyalog önizlemesi, tıklanabilir dal haritası, otomatik yenileme ve
+  dosya satırını gösteren akış, varlık ve çeviri uyarıları.
+- Tree, arayüz genelinde sürükle-bırak, girdi bağlamları, tuş atama ve
+  gamepad ipuçları. Otomatik ses kısma ve F3 üzerinden geliştirici konsolu.
+- Arka planda varlık yükleme ve bölüm geçişleri. Canvas Y sıralaması,
+  hareket interpolasyonu, yönlü animasyon ve animasyon işaretleri.
+- Parçalı TileMap yükleme, parçalar arası NPC navigasyonu, şekil
+  taramaları, zıplama yardım ayarları ve yeni örnek galeri ekranları.
+- `Scripts/doku2d` başlatıcısı ve PNG klasörlerinden sprite atlası
+  üreten `doku2d atlas` komutu.
+- Shader desteği olmayan Windows grafik ortamlarında başlangıç oyunu
+  açılıyor. Ortam rengi ve CanvasGroup saydamlığı temel çizimle çalışıyor.
+
 ## 1.0.0rc1
 
 - Oyun döngüsü, `Entity`, katmanlı `Canvas`, bölüm kapsamları, sinyaller,

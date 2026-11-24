@@ -1,0 +1,61 @@
+@portrait Görevli left "portraits/keeper.png"
+@portrait Gezgin right "portraits/traveler.png"
+@portrait Görevli left "portraits/keeper-relieved.png" relieved
+@portrait Arşivci right "portraits/missing.png"
+
+~ start
+@event preview_started
+Görevli: [tr harbor.greeting] Hoş geldin, {player_name}. Limandan gelen mektup sende mi?
+- [tr harbor.give] {letter_count} mektup teslim et => delivered [if has_letter]
+- [tr harbor.wait] Mektubu sonra getir => waiting
+
+~ delivered
+Görevli: [tr harbor.received] Sonunda geldi! Kuzey fenerini bu gece yakabiliriz.
+@expression relieved
+@pause 0.45
+@voice "res://world/beacon.wav"
+@event letter_delivered
+=> archive [if ask_archive]
+=> END
+
+~ waiting
+Gezgin: [tr harbor.return] Mektubu bulduğumda buraya döneceğim.
+=> END
+
+~ archive
+Arşivci: [tr harbor.archive] Bu bölüm eksik varlık uyarılarını gösterir.
+@voice "voices/missing.ogg"
+=> END
+
+~ gate
+Görevli: Dur…[pause=0.45] [shake rate=10]Kapı kapanıyor![/shake] Kod 42. Vakit dolmadan karar ver.
+@timeout 12 closed
+- Şifreyi gir => code [if has_letter] [locked "Önce has_letter koşulunu aç"]
+- Geri çekil => closed
+
+~ code
+Görevli: Kasaya yazılan iki basamaklı kodu gir. Değeri Enter ile onayla.
+@input gate_code number "Kapı kodu" 10 99
+=> name [if gate_code == 42]
+=> closed
+
+~ name
+Görevli: Doğru! İçeri girmeden önce adını söyle.
+@input visitor text "En az iki harf" 2 24
+=> call_keeper
+
+~ call_keeper
+Görevli: {visitor}, fener bekçisi seninle konuşmak istiyor.
+@call "shared-keeper.dialogue" greeting report
+
+~ report
+Görevli: Tekrar hoş geldin, {visitor}. Fener bekçisi konuşmayı tamamladı.
+=> END
+
+~ closed
+Gezgin: Kapı kapandı. Sonra tekrar deneyebilirim.
+=> END
+
+~ conditional_only
+Gezgin: Bu bölüm koşul yanlışken seçilebilir cevap kalmadığını göstermek için var.
+- Mektubu göster => END [if has_letter]

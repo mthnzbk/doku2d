@@ -1,0 +1,19 @@
+# Optional portraits go before the first section:
+# @portrait "Liman Görevlisi" left "res://portraits/keeper.png"
+# @portrait "Gezgin" right "res://portraits/traveler.png"
+
+~ start
+Liman Görevlisi: Rüzgâr döndü. İskeleyi kapatmadan önce şu mektubu teslim edebilir misin?
+Gezgin: Kime götürmem gerekiyor?
+Liman Görevlisi: Yel değirmeninin bekçisi Ayla’ya. Seni kapıda karşılar.
+- Evet, götürürüm. => accepted
+- Hayır, şimdi olmaz. => declined
+
+~ accepted
+Gezgin: Mektubu ver. Patikayı takip ederim.
+Liman Görevlisi: Teşekkürler. Kuzeydeki taş köprü hâlâ açık.
+=> END
+
+~ declined
+Liman Görevlisi: Öyleyse mektubu burada bekletirim.
+=> END

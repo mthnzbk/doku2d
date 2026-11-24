@@ -1,0 +1,9 @@
+{
+  "harbor.greeting": "Hoş geldin, {player_name}. Limandan gelen mektup sende mi?",
+  "harbor.give": "{letter_count} mektup teslim et",
+  "harbor.wait": "Mektubu sonra getir",
+  "harbor.received": "Sonunda geldi! Kuzey fenerini bu gece yakabiliriz.",
+  "harbor.return": "Mektubu bulduğumda buraya döneceğim.",
+  "harbor.archive": "Bu bölüm eksik varlık uyarılarını gösterir.",
+  "preview.continue": "Devam et"
+}

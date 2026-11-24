@@ -4,11 +4,13 @@ from pathlib import Path
 
 from doku2d import Button, CheckBox, CheckButton, Color, Entity, Game, Label, LineEdit
 from doku2d import Panel, ProgressBar, Slider, Theme
-from . import collect_game, effects_demo, example1, gui_demo, platform_demo, world_demo
+from doku2d.dialogue.preview import make_preview
+from . import collect_game, effects_demo, engine_demo, example1, gui_demo, platform_demo, toolkit_demo, world_demo
 from .starter_project.main import PROJECT, Starter
 
 
 THEMES = Path(__file__).with_name('themes')
+ASSETS = Path(__file__).with_name('assets')
 
 
 def starter_game():
@@ -17,7 +19,16 @@ def starter_game():
     return game
 
 
+def dialogue_demo():
+    return make_preview(ASSETS / 'preview.dialogue', asset_root=ASSETS, locale='tr', fallback_locale='tr',
+                        catalogs={'tr': 'locale/dialogue-tr.json', 'en': 'locale/dialogue-en.json'},
+                        values={'player_name': 'Lale', 'letter_count': 1})
+
+
 DEMOS = (
+    ('Diyalog önizleme', dialogue_demo),
+    ('Motor özellikleri', engine_demo.make_demo),
+    ('Girdi, ses ve araçlar', toolkit_demo.make_demo),
     ('Arayüz kontrolleri', gui_demo.make_demo),
     ('Işık toplama', collect_game.make_game),
     ('Tiled, kamera ve ses', world_demo.make_demo),
@@ -49,7 +60,7 @@ class Gallery(Entity):
         place(Panel(), 374, 92, 598, 560)
         place(Label(text='Örnekler'), 52, 111, 250, 36).font_size = 20
         for index, (label, factory) in enumerate(DEMOS):
-            button = place(Button(text=label), 52, 160 + index * 64, 278, 48)
+            button = place(Button(text=label), 52, 156 + index * 47, 278, 39)
             button.pressed.connect(lambda factory=factory: self.open_demo(factory))
 
         place(Label(text='Tema önizlemesi'), 404, 111, 450, 36).font_size = 20

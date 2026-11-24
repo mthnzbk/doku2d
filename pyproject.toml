@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "doku2d"
-version = "1.0.0rc1"
+version = "1.0.0rc2"
 description = "Python için kod odaklı 2D oyun framework'ü"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {file = "LICENSE"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{name = "Metehan Özbek"}]
 dependencies = ["sfml>=3.0.2.0,<3.1", "pymunk>=7.0,<8"]
 classifiers = [

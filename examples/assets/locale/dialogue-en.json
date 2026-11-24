@@ -1,0 +1,8 @@
+{
+  "harbor.greeting": "Welcome, {player_name}. Did you bring the letter from the harbor?",
+  "harbor.give": "Deliver {letter_count} letter(s)",
+  "harbor.wait": "Bring the letter later",
+  "harbor.received": "It finally arrived! We can light the north beacon tonight.",
+  "harbor.return": "I'll come back when I find the letter.",
+  "preview.continue": "Continue"
+}
