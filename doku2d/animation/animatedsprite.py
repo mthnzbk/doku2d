@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from math import isfinite
 from types import MappingProxyType
@@ -15,6 +16,7 @@ class Animation:
     frames: tuple = (0,)
     fps: float = 8.0
     loop: bool = True
+    markers: Mapping = field(default_factory=dict, hash=False)
 
 
 class AnimatedSprite(Entity):
@@ -24,6 +26,7 @@ class AnimatedSprite(Entity):
     animation_finished = Signal()
     animation_looped = Signal()
     frame_changed = Signal()
+    marker_reached = Signal()
     sprite_frames_changed = Signal()
 
     def __init__(self, texture=None, *, frame_size=None, name=None, resources=None):
@@ -40,6 +43,7 @@ class AnimatedSprite(Entity):
         self._playback_speed = 1.0
         self._playing = False
         self._finished = False
+        self._started = False
         self._time = 0.0
         if frame_size is not None:
             self.frame_size = frame_size
@@ -55,14 +59,24 @@ class AnimatedSprite(Entity):
         return self._motion
 
     @staticmethod
-    def _clip(frames, fps, loop):
+    def _clip(frames, fps, loop, markers=None):
         frames = tuple(frames)
         if not frames or any(not isinstance(frame, AtlasRegion) and (not isinstance(frame, int) or frame < 0)
                              for frame in frames):
             raise ValueError('Animation frames must be nonnegative indices or atlas regions')
         if not isfinite(fps) or fps <= 0:
             raise ValueError("Animation fps must be positive and finite")
-        return Animation(frames,float(fps),bool(loop))
+        if markers is not None and not isinstance(markers, Mapping):
+            raise TypeError("Markers must map frame indices to names")
+        events = {}
+        for frame, names in (markers or {}).items():
+            if type(frame) is not int or not 0 <= frame < len(frames):
+                raise ValueError("Marker frame is outside the animation")
+            names = (names,) if isinstance(names, str) else tuple(names)
+            if not names or any(not isinstance(name, str) or not name.strip() for name in names):
+                raise ValueError("Markers must have nonempty names")
+            events[frame] = names
+        return Animation(frames,float(fps),bool(loop),MappingProxyType(events))
 
     def _grid(self, texture, frame_size):
         if texture is None or frame_size is None:
@@ -133,9 +147,9 @@ class AnimatedSprite(Entity):
         clips = {}
         for name,config in values.items():
             if isinstance(config,Animation):
-                clip = self._clip(config.frames,config.fps,config.loop)
+                clip = self._clip(config.frames,config.fps,config.loop,config.markers)
             else:
-                clip = self._clip(config["frames"],config.get("fps",8),config.get("loop",True))
+                clip = self._clip(config["frames"],config.get("fps",8),config.get("loop",True),config.get("markers"))
             self._validate_frames(clip,self._visual.hframes*self._visual.vframes)
             clips[name] = clip
         self._clips = clips
@@ -143,13 +157,14 @@ class AnimatedSprite(Entity):
         self._frame = 0
         self._time = 0
         self._playing = False
+        self._started = self._finished = False
         self._apply_frame()
         self.sprite_frames_changed.emit()
 
-    def add_animation(self, name, frames, *, fps=8, loop=True):
+    def add_animation(self, name, frames, *, fps=8, loop=True, markers=None):
         if not isinstance(name,str) or not name:
             raise ValueError("Animation names must be nonempty strings")
-        clip = self._clip(frames,fps,loop)
+        clip = self._clip(frames,fps,loop,markers)
         self._validate_frames(clip,self._visual.hframes*self._visual.vframes)
         self._clips[name] = clip
         if not self.animation:
@@ -169,10 +184,31 @@ class AnimatedSprite(Entity):
         if name not in self._clips:
             raise KeyError(f"Unknown animation: {name}")
         if name != self.animation:
-            self._animation = name
-            self._frame,self._time = 0,0
-            self._apply_frame()
-            self.animation_changed.emit()
+            self._set_animation(name)
+
+    def _set_animation(self, name, frame=0, time=0.0):
+        self._animation = name
+        self._frame = frame
+        self._time = time
+        self._started = False
+        self._apply_frame()
+        self.animation_changed.emit()
+
+    def _phase_in_clip(self, next_clip, speed):
+        current = self._clips.get(self.animation)
+        if current is None or not self._started or self._finished or not (current.loop and next_clip.loop):
+            return None
+
+        previous_frame = self.frame
+        if self._playback_speed * self.speed_scale < 0:
+            previous_frame = len(current.frames) - 1 - previous_frame
+        phase = (previous_frame + self._time * current.fps) / len(current.frames)
+        position = phase * len(next_clip.frames)
+        frame = min(len(next_clip.frames) - 1, int(position))
+        time = (position - frame) / next_clip.fps
+        if speed * self.speed_scale < 0:
+            frame = len(next_clip.frames) - 1 - frame
+        return frame, time
 
     @property
     def frame(self):
@@ -205,13 +241,21 @@ class AnimatedSprite(Entity):
     def is_playing(self):
         return self.playing
 
-    def play(self, name=None, *, speed=1.0, from_end=False):
+    def play(self, name=None, *, speed=1.0, from_end=False, preserve_phase=False):
+        """Play a clip, optionally retaining progress when switching between loops."""
         name = name or self.animation
         if name not in self._clips:
             raise KeyError(f"Unknown animation: {name}")
         if not isfinite(speed):
             raise ValueError("Playback speed must be finite")
-        self.animation = name
+        clip = self._clips[name]
+        starting = name != self.animation or not self._started or self._finished or from_end
+        phase = (self._phase_in_clip(clip, speed)
+                 if name != self.animation and preserve_phase and not from_end else None)
+        if phase is not None:
+            self._set_animation(name, *phase)
+        else:
+            self.animation = name
         if self._finished:
             self.frame = 0 if speed*self.speed_scale >= 0 else len(self._clips[name].frames)-1
             self._time = 0
@@ -221,6 +265,15 @@ class AnimatedSprite(Entity):
             self._time = 0
         self._playback_speed = float(speed)
         self._playing = True
+        self._started = True
+        if starting and phase is None:
+            self._emit_markers(name, clip, self.frame)
+
+    def _emit_markers(self, name, clip, frame):
+        for marker in clip.markers.get(frame, ()):
+            if not self.playing or self.animation != name or self._clips.get(name) is not clip or self.frame != frame:
+                break
+            self.marker_reached.emit(marker, name, frame)
 
     def pause(self):
         self._playing = False
@@ -228,6 +281,7 @@ class AnimatedSprite(Entity):
     def stop(self):
         self.pause()
         self._finished = False
+        self._started = False
         self._time = 0
         if self.animation:
             self.frame = 0
@@ -263,9 +317,12 @@ class AnimatedSprite(Entity):
             index = self.frame+direction
             if 0 <= index < len(clip.frames):
                 self.frame = index
+                self._emit_markers(name, clip, index)
             elif clip.loop:
-                self.frame = index%len(clip.frames)
+                index %= len(clip.frames)
+                self.frame = index
                 self.animation_looped.emit()
+                self._emit_markers(name, clip, index)
             else:
                 self._playing = False
                 self._finished = True

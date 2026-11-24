@@ -7,7 +7,7 @@ from unittest.mock import patch
 import os
 import subprocess
 
-from sfml.graphics import Color, Image, RectangleShape, RenderTexture, RenderWindow, Texture
+from sfml.graphics import Color, Image, RectangleShape, RenderTexture, RenderWindow, Shader, Texture
 from sfml.window import Event, VideoMode
 
 from doku2d import AmbientLight, Button, Camera, CanvasGroup, DirectionalLight, Entity, Game, Label, PointLight, Signal, Theme, TileMap, TileSet, VBox
@@ -183,6 +183,8 @@ class EngineFeatures(TestCase):
         self.assertIs(first[1, 0], layer._meshes[1, 0])
 
     def test_scaled_ambient_draws_without_light_buffers_and_switches_to_point_lights(self):
+        if not Shader.is_available():
+            self.skipTest('Point and directional lights require OpenGL shaders')
         game = Game(size=(40, 20))
         self.addCleanup(game.close)
         class Surface(Entity):

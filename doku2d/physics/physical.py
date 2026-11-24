@@ -20,6 +20,7 @@ class PhysicsBody(Entity):
         super().__init__(name)
         self._native_body = None
         self._native_shape = None
+        self._previous_physics_pose = None
         self.collision_object = CollisionObject()
         self._shape = shape or (Circle(radius) if radius is not None else Box(size))
         if not isinstance(self._shape,(Box,Circle,Polygon,Segment)):
@@ -71,6 +72,7 @@ class PhysicsBody(Entity):
     @position.setter
     def position(self, value):
         Entity.position.fset(self,value)
+        self._reset_interpolation_outside_step()
         if self._native_body is not None:
             self._native_body.position = tuple(self._position)
             self._native_body.activate()
@@ -83,10 +85,44 @@ class PhysicsBody(Entity):
     @rotation.setter
     def rotation(self, value):
         Entity.rotation.fset(self,value)
+        self._reset_interpolation_outside_step()
         if self._native_body is not None:
             self._native_body.angle = radians(self._rotation)
             self._native_body.activate()
             self.game.physics.reindex(self)
+
+    def reset_physics_interpolation(self):
+        """Draw the current pose immediately, discarding older physics poses."""
+        self._previous_physics_pose = None
+
+    def _reset_interpolation_outside_step(self):
+        if self._previous_physics_pose is not None and (
+                self.game is None or not self.game._interpolating_step or self.game.paused):
+            self.reset_physics_interpolation()
+
+    @property
+    def render_position(self):
+        position = self.position
+        if self._previous_physics_pose is None or self.game is None:
+            return position
+        previous = self._previous_physics_pose[0]
+        return previous + (position - previous) * self.game._physics_blend
+
+    @property
+    def render_rotation(self):
+        angle = self.rotation
+        if self._previous_physics_pose is None or self.game is None:
+            return angle
+        previous = self._previous_physics_pose[1]
+        delta = (angle - previous + 180) % 360 - 180
+        return previous + delta * self.game._physics_blend
+
+    @property
+    def render_transform(self):
+        previous = self._previous_physics_pose
+        if previous is None or (self._position == previous[0] and self._rotation == previous[1]):
+            return self.transform
+        return self._transform_at(self.render_position, self.render_rotation)
 
     @property
     def scale(self):
@@ -191,6 +227,8 @@ class PhysicsBody(Entity):
         self._linear_velocity = self._vector(value)
         if self._native_body is not None:
             self._native_body.velocity = tuple(self._linear_velocity)
+            if self._native_body.body_type == pymunk.Body.STATIC:
+                self._platform_velocity = self._linear_velocity
             self._native_body.activate()
 
     @property
@@ -214,6 +252,8 @@ class PhysicsBody(Entity):
         self._angular_velocity = float(value)
         if self._native_body is not None:
             self._native_body.angular_velocity = radians(value)
+            if self._native_body.body_type == pymunk.Body.STATIC:
+                self._platform_angular_velocity = self._native_body.angular_velocity
 
     @property
     def collision_layer(self):

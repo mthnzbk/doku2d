@@ -1,4 +1,4 @@
-"""Drive a floating CharacterBody along a TileMap path during physics steps."""
+"""Drive a floating CharacterBody along a regular or streamed TileMap path."""
 from math import hypot, isfinite
 
 from ..core.entity import Entity
@@ -13,9 +13,10 @@ class PathFollower:
                  repath_interval=0.25, diagonal=False, blocked_layers=None,
                  bounds=None, blocked=(), radius=None, avoid_bodies=True):
         from ..rendering.tilemap import TileMap
+        from ..rendering.tilemapstream import TileMapStream
 
-        if not isinstance(tilemap, TileMap):
-            raise TypeError('Navigation needs a TileMap')
+        if not isinstance(tilemap, (TileMap, TileMapStream)):
+            raise TypeError('Navigation needs a TileMap or TileMapStream')
         if body.motion_mode != 'floating':
             raise ValueError('TileMap navigation needs a floating CharacterBody')
         owner = body.game or body._pending_game
@@ -24,6 +25,7 @@ class PathFollower:
             raise ValueError('The character and tile map must belong to the same Game')
         self._body = body
         self._tilemap = tilemap
+        self._stream = tilemap if isinstance(tilemap, TileMapStream) else None
         self._options = dict(diagonal=diagonal, bounds=None if bounds is None else tuple(bounds),
                              blocked_layers=(blocked_layers if blocked_layers is None or isinstance(blocked_layers, str)
                                              else tuple(blocked_layers)))
@@ -73,6 +75,8 @@ class PathFollower:
         self._remaining = 0.0
         self._cells = ()
         self._index = 0
+        self._planned_goal = None
+        self._planned_revision = None
 
     @property
     def state(self):
@@ -118,6 +122,9 @@ class PathFollower:
             if not remainder or remainder not in (path, path[1:]):
                 self._cells, self._index = path, 0
             self._state = 'moving'
+            self._planned_goal = goal
+            if self._stream is not None:
+                self._planned_revision = self._stream._navigation_revision
             self._reported_failure = False
             return True
         self._cells, self._index = (), 0
@@ -143,10 +150,19 @@ class PathFollower:
 
         target = self._target_point()
         goal = self._tilemap.world_to_map(target)
+        start = self._tilemap.world_to_map(body.position)
+        stream = self._stream
         self._remaining -= dt
-        if self._remaining <= 0:
-            if not self._plan(self._tilemap.world_to_map(body.position), goal):
+        if stream is not None:
+            limit = max(stream._chunk_size)+1
+            stream._pin_navigation(self, start, self._cells[self._index:self._index+limit])
+        route_changed = stream is not None and self._cells and (
+            self._planned_goal != goal or self._planned_revision != stream._navigation_revision)
+        if route_changed or (self._remaining <= 0 and (stream is None or not self._cells or callable(self._blocked))):
+            if not self._plan(start, goal):
                 return
+            if stream is not None:
+                stream._pin_navigation(self, start, self._cells[self._index:self._index+limit])
         if not self._cells:
             self._halt()
             return
@@ -158,6 +174,9 @@ class PathFollower:
             delta = waypoint - body.position
             distance = hypot(*delta)
             if distance > (self._arrival_distance() if final else self._tolerance):
+                if stream is not None and (not stream._navigation_known(start) or not stream._navigation_known(cell)):
+                    self._halt()
+                    return
                 velocity = delta * (min(self.speed, distance/dt) / distance)
                 if self.avoid_bodies and not body.game.physics._navigation_clear(
                         body.position, body.position+velocity*dt, self.radius, agent=body,

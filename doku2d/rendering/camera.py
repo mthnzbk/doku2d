@@ -104,7 +104,7 @@ class Camera(Entity):
 
     def _target_position(self):
         if self.target is None: return self.position
-        return self._vector(self.target() if callable(self.target) else self.target.position)
+        return self._vector(self.target() if callable(self.target) else self.target.render_position)
 
     def reset_smoothing(self):
         self.position = self._target_position()
@@ -155,7 +155,11 @@ class Camera(Entity):
 
     @property
     def screen_center(self):
-        return self._clamp((self.position if self._focus is None else self._focus)+self.offset+self._shake_offset)
+        focus = self.position if self._focus is None else self._focus
+        if (self.game is not None and self.game.physics_interpolation and isinstance(self.target, Entity)
+                and not self.position_smoothing and not any(self._dead_zone)):
+            focus = self.target.render_position
+        return self._clamp(focus + self.offset + self._shake_offset)
     @property
     def view_rotation(self): return self.rotation if self._view_rotation is None else self._view_rotation
     @property

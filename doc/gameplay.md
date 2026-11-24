@@ -100,13 +100,46 @@ Aynı animasyonu tekrar `play("walk")` ile seçmek kareyi sıfırlamaz; bu yüzd
 hareket kodunda her adımda çağrılabilir. `pause()` konumu korur, `stop()` ilk
 kareye döner. `speed_scale`, `play(..., speed=-1, from_end=True)`, `flip_h`,
 `flip_v`, `offset`, `scale` desteklenir.
+`play("walk_east", preserve_phase=True)` iki döngülü klip arasında
+geçerken döngüdeki ilerlemeyi korur.
 `animation_changed`, `frame_changed`, `animation_looped`, `animation_finished`
 parametresiz sinyallerdir. Döngüsüz animasyon bitiş sinyalini bir kez yayar.
+
+Bir kareye ayak sesi, toz veya benzeri bir olay bağlayabilirsin:
+
+```python
+sprite.add_animation("run_south", [0, 1, 2, 3], fps=10,
+                     markers={1: "footstep", 3: ("footstep", "dust")})
+sprite.marker_reached.connect(on_marker)  # on_marker(marker, animation, frame)
+```
+
+İşaret numarası klip içindeki sıfır tabanlı kare sırasıdır. Oynatma bir
+güncellemede birkaç kareyi geçse bile bütün işaretler geçiş sırasıyla yayılır.
+Döngü konumunu koruyarak başka klibe geçmek, o konumdaki işareti tekrar yaymaz.
 
 Alternatif tanım: `sprite.sprite_frames = {"walk": Animation((0, 1, 2), 10, True)}`.
 `Animation` aynı paketten içe aktarılır; `sprite_frames` salt okunur görünüm döndürür.
 Bir gövdeye verilen sprite ayrıca `game.add` ile kaydedilmez; konumu gövdeye göredir.
 Gövde animasyonu ve çizimi otomatik ilerletir. Duraklatınca animasyon da durur.
+
+### Üstten görünümlü karakterler
+
+Yönlü klipleri ekledikten sonra mevcut gövdeye bağla:
+
+```python
+player.sprite = sprite
+motion = sprite.follow_motion(player, directions=8)
+```
+
+Klip adları `idle_south`, `run_east` ve `run_north_east` biçimindedir.
+`directions=4` ana yönleri, `directions=8` çaprazları da seçer. Bir yönün
+klibi eksikse `idle` veya `run` gibi yönsüz klip kullanılabilir. Özel adlar
+için `idle="stand"` ve `run="walk"` ver.
+
+Karakter ilk olarak güneye bakar. Durunca `motion.facing` son hareket yönünü
+korur. Koşarken yön değişince yeni klip aynı döngü konumundan oynar. Bu
+seçim, klipleri otomatik aynalamaz. `navigate_to()` ile hareket eden NPC’ler
+aynı şekilde bağlanır.
 
 ## Fizik gövdeleri ve alanlar
 

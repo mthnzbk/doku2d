@@ -25,6 +25,24 @@ def find_path(tilemap, start, goal, *, diagonal, blocked_layers, bounds, blocked
 
     if not in_bounds(start) or not in_bounds(goal):
         return []
+    occupied = tile_occupancy(tilemap, (left, top, right, bottom), blocked_layers, blocked)
+
+    # The transform's rotation preserves a circle, while its scale turns the
+    # world radius into separate horizontal and vertical map clearances.
+    sx, sy = map(abs, tilemap.scale)
+    if radius and (sx == 0 or sy == 0):
+        return []
+    rx, ry = (radius/sx, radius/sy) if radius else (0, 0)
+    return cell_path(start, goal, occupied=occupied, bounds=(left, top, right, bottom),
+                     tile_size=(tw, th), clearance=(rx, ry), world_center=tilemap.map_to_world,
+                     diagonal=diagonal, physics=physics, radius=radius, agent=agent,
+                     ignored=ignored, tilemap=tilemap)
+
+
+def tile_occupancy(tilemap, bounds, blocked_layers, blocked=()):
+    """Return a cell query for authored obstacles in a TileMap's local grid."""
+    left, top, right, bottom = bounds
+    tw, th = tilemap.tile_size
     explicit = blocked_layers is not None
     layers = tilemap.layers
     if explicit:
@@ -91,16 +109,15 @@ def find_path(tilemap, start, goal, *, diagonal, blocked_layers, bounds, blocked
                 return True
         return False
 
-    # The transform's rotation preserves a circle, while its scale turns the
-    # world radius into separate horizontal and vertical map clearances.
-    sx, sy = map(abs, tilemap.scale)
-    if radius and (sx == 0 or sy == 0):
-        return []
-    rx, ry = (radius/sx, radius/sy) if radius else (0, 0)
+    return occupied
 
-    @cache
-    def world_center(point):
-        return tilemap.map_to_world(point)
+
+def cell_path(start, goal, *, occupied, bounds, tile_size, clearance, world_center,
+              diagonal, physics, radius, agent, ignored, tilemap, max_nodes=None):
+    left, top, right, bottom = bounds
+    tw, th = tile_size
+    rx, ry = clearance
+    world_center = cache(world_center)
 
     def clear_between(first, second):
         if radius:
@@ -122,11 +139,13 @@ def find_path(tilemap, start, goal, *, diagonal, blocked_layers, bounds, blocked
 
     @cache
     def walkable(point):
-        return in_bounds(point) and not occupied(point) and (not extra_clearance or clear_between(point, point))
+        x, y = point
+        return (left <= x < right and top <= y < bottom and not occupied(point)
+                and (not extra_clearance or clear_between(point, point)))
 
     extra_clearance = bool(radius or physics is not None)
     return grid_path(start, goal, walkable, diagonal=diagonal,
-                     can_cross=clear_between if extra_clearance else None)
+                     can_cross=clear_between if extra_clearance else None, max_nodes=max_nodes)
 
 
 def _intersects_rect(start, end, low, high):

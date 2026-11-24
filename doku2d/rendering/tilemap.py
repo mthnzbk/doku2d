@@ -420,7 +420,7 @@ class TileLayer(Entity):
         xs,ys = zip(*self._cells)
         return min(xs),min(ys),max(xs)-min(xs)+1,max(ys)-min(ys)+1
 
-    def _build_chunk(self,key):
+    def _build_chunk(self,key, *, packed=False):
         owner = self.tile_map
         tw,th = owner._tile_size
         reverse_x = owner.render_order.startswith('left')
@@ -428,16 +428,32 @@ class TileLayer(Entity):
         color = Color(*self.tint[:3],round(self.tint[3]*self.opacity))
         points = self._chunks.get(key,{})
         frames = {}
-        for (x,y),cell in sorted(points.items(),key=lambda item:(item[0][1],-item[0][0] if reverse_x else item[0][0])):
+        regions = {}
+        ordered = points.items() if packed else sorted(
+            points.items(), key=lambda item: (item[0][1], -item[0][0] if reverse_x else item[0][0]))
+        if packed:
+            mesh = VertexArray(PrimitiveType.TRIANGLES, 6*len(points))
+            rows[None] = [(owner.tilesets[0].texture, mesh)]
+        for i, ((x,y),cell) in enumerate(ordered):
             tileset = owner.tilesets[cell.tileset]
-            texture,region = tileset.region(cell.tile_id,owner._time)
-            if tileset.tiles.get(cell.tile_id, {}).get('animation'):
-                frames[cell.tileset, cell.tile_id] = tileset.animation_frame(cell.tile_id, owner._time)
+            frame_key = cell.tileset, cell.tile_id
+            if frame_key not in regions:
+                regions[frame_key] = tileset.region(cell.tile_id, owner._time)
+                if tileset.tiles.get(cell.tile_id, {}).get('animation'):
+                    frames[frame_key] = tileset.animation_frame(cell.tile_id, owner._time)
+            texture,region = regions[frame_key]
             offset = tileset.offset
             rect = (x*tw+offset.x,y*th+th-region[3]+offset.y,region[2],region[3])
-            runs = rows.setdefault(y,[])
-            if not runs or runs[-1][0] is not texture: runs.append((texture,VertexArray(PrimitiveType.TRIANGLES)))
-            for vertex in quad(texture,region,rect,cell,color): runs[-1][1].append(vertex)
+            vertices = quad(texture,region,rect,cell,color)
+            if packed:
+                for j, vertex in enumerate(vertices):
+                    mesh[6*i+j] = vertex
+            else:
+                runs = rows.setdefault(y,[])
+                if not runs or runs[-1][0] is not texture:
+                    runs.append((texture,VertexArray(PrimitiveType.TRIANGLES)))
+                for vertex in vertices:
+                    runs[-1][1].append(vertex)
         self._meshes[key] = (rows, frames)
         return rows
 
@@ -484,6 +500,11 @@ class TileLayer(Entity):
         else:
             keys = ((cx,cy) for cy in rows for cx in columns if (cx,cy) in self._chunks)
         tilesets = owner.tilesets
+        # Exactly one square tile per cell has no overhang and can share a
+        # single chunk draw. Keep row order for tall, offset or mixed tiles.
+        packed = (len(tilesets) == 1 and tw == th and tilesets[0]._tile_size == (tw, th)
+                  and tilesets[0].texture is not None and not tilesets[0]._images
+                  and not tilesets[0]._image_paths and not any(tilesets[0].offset))
         frame_cache = {}
         debug = self.game.debug if self.game and self.game.debug.visible else None
         for key in sorted(keys, key=lambda key: -key[0] if reverse_x else key[0]):
@@ -496,10 +517,14 @@ class TileLayer(Entity):
                     if previous != frame_cache[tile]:
                         mesh = None
                         break
-            mesh_rows = self._build_chunk(key) if mesh is None else mesh[0]
-            if debug is not None and any(y0 <= y <= y1 for y in mesh_rows):
+            mesh_rows = self._build_chunk(key, packed=packed) if mesh is None else mesh[0]
+            if debug is not None and (packed or any(y0 <= y <= y1 for y in mesh_rows)):
                 debug._tile_chunk(self.canvas or self.game.world, transform,
                                   (key[0]*cw*tw, key[1]*ch*th, cw*tw, ch*th))
+            if packed:
+                texture, vertices = mesh_rows[None][0]
+                target.draw(vertices, RenderStates(transform=transform, texture=texture, shader=states.shader))
+                continue
             for y, runs in mesh_rows.items():
                 if y0 <= y <= y1:
                     rows_in_view.setdefault(y, []).extend(runs)

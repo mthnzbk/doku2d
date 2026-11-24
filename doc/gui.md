@@ -77,6 +77,49 @@ Radyal dolum ve HDR renk seçimi uygulanmamıştır. RichLabel tam bir belge
 veya HTML motoru değildir. TextEdit temel düzenleme sağlar, işletim sisteminin
 IME aday penceresini uygulama içinde yönetmez.
 
+## Tree
+
+```python
+from doku2d import Tree
+
+tree = game.add(Tree())
+missions = tree.add_item("Görevler", expanded=False)
+quest = tree.add_item("Mektubu teslim et", parent=missions, data="letter")
+tree.item_activated.connect(lambda item: print(item.data))
+tree.select(quest)
+```
+
+Sol ve sağ oklar dalları kapatıp açar. Yukarı ve aşağı görünür satırlarda
+gezinir, Enter seçili öğeyi etkinleştirir. Fareyle dal işaretini tıklayabilir
+ve tekerlekle kaydırabilirsin. `set_expanded(item, value)` ile dalı koddan
+değiştir, `remove_item(item)` ile alt dalları birlikte kaldır.
+
+## Sürükle-bırak
+
+```python
+from doku2d import DragData
+
+inventory_slot.drag_source = lambda position: DragData(item, preview=item.name)
+equipment_slot.drop_filter = lambda position, data: data.kind == "tool"
+equipment_slot.dropped.connect(equip_item)  # equip_item(data, position)
+```
+
+`drag_source` başlangıçtaki yerel konumu alır. Boş yuvadan sürükleme
+başlamasın istiyorsan `None` döndür. `DragData` önizlemesi metin,
+`Texture` veya `AtlasRegion` olabilir. `drop_filter` hedefteki yerel
+işaretçi konumunu ve taşınan veriyi alır.
+
+Motor, sürükleme eşiğini, önizlemeyi, geçerli hedef vurgusunu ve iptali
+yönetir. Kaynakta `drag_started(data)` ve `drag_finished(data, accepted)`
+sinyalleri vardır. Geçerli hedefte bırakıldığında `dropped(data, position)`
+yayılır. Alt sınıflar `get_drag_data`, `can_drop_data` ve `drop_data`
+metotlarını da kullanabilir.
+
+`Tree.item_at(position)` ile hedef satırı bulabilir,
+`tree.move_item(item, parent=branch)` ile alt dalları birlikte taşıyabilirsin.
+Eşyanın envanterden çıkarılması veya öğenin taşınması oyunun bırakma
+işleyicisinde yapılır.
+
 ## Yerleşim
 
 `HBox`, `VBox`, `Grid`, `Center` birer yerleşim kontrolüdür. `add(control,

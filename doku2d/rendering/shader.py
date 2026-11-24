@@ -2,7 +2,7 @@
 from pathlib import Path
 from types import MappingProxyType
 
-from sfml.graphics import BLEND_NONE, Color, RenderStates, Shader, Sprite
+from sfml.graphics import BLEND_NONE, BlendMode, Color, Factor, RenderStates, Shader, Sprite
 
 
 class ShaderMaterial:
@@ -88,14 +88,30 @@ _STRAIGHT = b'''
 '''
 
 
-def draw_effect(game, target, texture, shader, **states):
+_PREMULTIPLIED_ALPHA = BlendMode(Factor.ONE, Factor.ONE_MINUS_SRC_ALPHA)
+
+
+def _draw_fullscreen(game, target, sprite, states):
     previous = target.view
     target.reset_GL_states()
     target.view = game._pixel_view(target.size)
     try:
-        target.draw(Sprite(texture), RenderStates(shader=shader, **states))
+        target.draw(sprite, states)
     finally:
         target.view = previous
+
+
+def draw_effect(game, target, texture, shader, **states):
+    _draw_fullscreen(game, target, Sprite(texture), RenderStates(shader=shader, **states))
+
+
+def draw_tinted_texture(game, target, texture, tint, opacity=1):
+    """Composite a premultiplied offscreen texture without a shader."""
+    opacity *= tint.a/255
+    sprite = Sprite(texture)
+    sprite.color = Color(round(tint.r*opacity), round(tint.g*opacity), round(tint.b*opacity),
+                         round(255*opacity))
+    _draw_fullscreen(game, target, sprite, RenderStates(blend_mode=_PREMULTIPLIED_ALPHA))
 
 
 class CanvasEffect:

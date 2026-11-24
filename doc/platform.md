@@ -20,7 +20,8 @@ from doku2d import CharacterBody, Game
 
 class Player(CharacterBody):
     def __init__(self):
-        super().__init__(motion_mode="grounded", size=(20, 30))
+        super().__init__(motion_mode="grounded", size=(20, 30),
+                         coyote_time=0.10, jump_buffer=0.12)
 
     def physics_update(self, dt):
         x = self.input.get_axis("move_left", "move_right")
@@ -41,9 +42,15 @@ Hız piksel/saniye, açı ayarları derece cinsindendir.
 
 `move_and_slide()` motor hızını sabit fizik adımı için hazırlar. Hareket ve
 çarpışma o adımın çözücüsünde tamamlanır; `dt` ile tekrar çarpılmaz.
-Durum sorguları son tamamlanan fizik adımını verir. `jump(speed)` yerdeyken
-bir kez kabul edilir, bool döndürür; havadayken tekrar zıplatmaz.
-`teleport(position)` hız ve temasları temizleyerek konumu değiştirir.
+Durum sorguları son tamamlanan fizik adımını verir. `jump(speed)` zıplamayı
+hemen başlatırsa `True` döner. İstek havada tamponlanırsa dönüş değeri
+`False` olur ve süre dolmadan zemin teması gerçekleşirse motor zıplamayı uygular.
+
+`coyote_time`, platform kenarından çıktıktan sonra zıplamanın kabul edildiği
+süredir. `jump_buffer`, havada basılan zıplama tuşunun yere inene kadar kaç
+saniye hatırlanacağını belirler. İkisi de varsayılan olarak `0` değerindedir.
+`teleport(position)` hız, temas ve bekleyen zıplamayı temizler.
+`drop_through()` başarıyla çalıştığında kenar hakkını ve bekleyen isteği iptal eder.
 
 - `is_on_floor()`, `is_on_wall()`, `is_on_ceiling()` birbirinden bağımsızdır;
   köşede hem zemin hem duvar teması olabilir.
@@ -95,6 +102,70 @@ kaldırıldı veya yukarıdaki çalışan davranışlara bağlandı. Genel gövd
 `force`, `torque`, `lock_rotation`, `freeze`, `sleeping` olarak çalışır.
 Yeni `Polygon` dışbükey fizik şeklidir; `Segment` çizgi çarpışması içindir.
 
+## Fizik interpolasyonu
+
+`Game(physics_interpolation=True)` seçeneği, sabit fizik adımları arasında
+çizilen konum ve dönüşü yumuşatır. `Game.from_project()` kullanan projelerde
+aynı ayarı `doku2d.toml` üzerinden açabilirsin.
+
+```toml
+[window]
+physics_fps = 60
+physics_interpolation = true
+```
+
+Özellik varsayılan olarak kapalıdır. Açıldığında çizim, son iki fizik adımı
+arasında ilerler ve bu yüzden fiziğin en fazla bir adım gerisindedir.
+`position`, `rotation`, `transform` ve fizik sorguları tamamlanan son adımın
+değerlerini verir. Özel çizimde `render_position`, `render_rotation` ve
+`render_transform` üzerinden ara konumu okuyabilirsin.
+
+Kamera bir fizik gövdesini takip ettiğinde onun çizilen konumunu izler.
+Gövdeye bağlı ışıklar ve gölgeler de aynı ara dönüşümü kullanır. Hareketli
+platformu interpolasyona dahil etmek için `move_to()` çağrısını
+`physics_update()` içinde yap.
+
+`CharacterBody.teleport()` geçişi sıfırlar. Fizik adımı dışında doğrudan
+verilen konum ve dönüş de ekrana hemen yansır. Fizik adımı içindeki özel bir
+ışınlanmadan sonra `body.reset_physics_interpolation()` çağırabilirsin.
+Kameranın kendi takip yumuşatmasını da sıfırlamak için
+`camera.reset_smoothing()` kullan.
+
+## ShapeCast
+
+`game.physics.shapecast()` bir daireyi veya kutuyu başlangıç noktasından bitiş
+noktasına doğru süpürür. Örneğin duvarın önünde duran karakterin atılabileceği
+mesafeyi ölçmek için gövde boyutuna yakın bir kutu kullanabilirsin.
+
+```python
+from doku2d import Circle, ShapeCast
+from doku2d.physics import Box
+
+start = player.position
+hit = game.physics.shapecast(Box((20, 28)), start, start + (96, 0),
+                            mask=1, exclude=(player,))
+if hit:
+    print(hit.collider, hit.point, hit.normal, hit.distance)
+
+probe = game.add(ShapeCast(Circle(8), target=player, target_position=(64, 0)))
+```
+
+Sonuç ilk teması verir. `fraction` yolun 0–1 arasındaki oranıdır ve `distance`
+şekil merkezinin temasa kadar gittiği mesafedir. Başlangıçta örtüşme varsa her
+ikisi de `0` olur. Başlangıç ile bitişi aynı verirsen yalnızca örtüşmeyi
+sorgularsın. Sorgu dünya koordinatları kullanır ve kutuyu `rotation` ile derece
+cinsinden yönlendirebilirsin. Bir süpürme boyunca yön sabit kalır.
+
+`ShapeCast` nesnesi her güncellemede sonucu yeniler. `target` verilirse nesnenin
+yerel konumu ve yönü takip edilir, hedefin kendi gövdesi sorgudan çıkarılır.
+Şekil boyutları dünya birimidir. Aynı karede güncel sonucu almak için
+`probe.force_update()` çağırabilirsin.
+
+`mask`, taranacak çarpışma katmanlarını seçer. Alanları dahil etmek için
+doğrudan sorguda `areas=True`, nesnede `include_areas=True` kullan.
+Tek yönlü platformlar sorguda yüzey olarak görünür. Geçiş kuralını karakterin
+fizik hareketi uygular.
+
 ## Tiled çarpışmaları
 
 ```python
@@ -133,7 +204,7 @@ katman → tile → nesne sırasıyla uygulanır. Bunlar native fizik maskeleri 
 katsayılarıdır; `collision_layer=2` ikinci katmanı ifade eder.
 Nesne katmanındaki point/text verileri çarpışmaya dönüşmez. Katmanın gizlenmesi
 fiziğini kapatmaz; gizli Collision katmanları bu şekilde kullanılabilir.
-Fizik katmanları `parallax=(1,1)` olmalıdır. Tek yönlü platform davranışı bu sürüme dahil değildir.
+Fizik katmanları `parallax=(1,1)` olmalıdır.
 
 Çarpışma şekli çizilmemiş sıradan görsel tile kendiliğinden katı olmaz.
 Elle tanımlanan atlas için kısa yol:

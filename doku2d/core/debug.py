@@ -1,4 +1,5 @@
 """Optional in-engine diagnostics, independent of game content and UI focus."""
+from collections import deque
 from contextlib import contextmanager
 from math import cos, isfinite, sin, tau
 from time import perf_counter
@@ -8,10 +9,13 @@ from sfml.window import Event, Keyboard
 
 
 class DebugOverlay:
-    _profile_sections = ('physics', 'update', 'render', 'navigation')
+    _profile_sections = ('events', 'physics', 'update', 'streaming', 'render', 'navigation', 'present')
 
     def __init__(self, game, *, enabled=False, key=Keyboard.F3):
+        from .console import DebugConsole
+
         self._game = game
+        self.console = DebugConsole(self)
         self._visible = self._held = False
         self._frame_time = 0.0
         self._chunks = {}
@@ -36,6 +40,7 @@ class DebugOverlay:
     def enabled(self, value):
         self._enabled = bool(value)
         if not self.enabled:
+            self.console.close()
             self._visible = self._held = False
             self._counting_draws = False
             self._working_draw_calls = self._last_draw_calls = 0
@@ -50,6 +55,7 @@ class DebugOverlay:
     def visible(self, value):
         self._visible = self.enabled and bool(value)
         if not self._visible:
+            self.console.close()
             self._begin_frame()
 
     @property
@@ -91,8 +97,13 @@ class DebugOverlay:
 
     @property
     def profile_ms(self):
-        """Exclusive CPU milliseconds by section, from the last rendered frame."""
+        """Elapsed milliseconds by section, excluding time in nested sections."""
         return dict(self._last_profile)
+
+    @property
+    def peak_frame_ms(self):
+        """Longest frame interval among the last 120 samples."""
+        return max(self._frame_intervals, default=0.0)
 
     @property
     def path_queries(self):
@@ -104,6 +115,7 @@ class DebugOverlay:
         return self._last_draw_calls
 
     def _reset_profile(self):
+        self._frame_intervals = deque(maxlen=120)
         self._working_profile = dict.fromkeys(self._profile_sections, 0.0)
         self._last_profile = self._working_profile.copy()
         self._working_queries = self._last_queries = 0
@@ -114,19 +126,17 @@ class DebugOverlay:
             yield
             return
         profile = self._working_profile
-        previous_navigation = profile['navigation']
+        previous = sum(profile.values())
         started = perf_counter()
         try:
             yield
         finally:
             elapsed = (perf_counter() - started) * 1000
-            # A* can run from a physics callback or any other section.
-            if section == 'navigation':
-                if self._working_profile is profile:
+            if self._working_profile is profile:
+                if section == 'navigation':
                     self._working_queries += 1
-            else:
-                elapsed -= profile['navigation'] - previous_navigation
-            profile[section] += max(0, elapsed)
+                # Nested sections have already recorded their exclusive time.
+                profile[section] += max(0, elapsed - (sum(profile.values()) - previous))
 
     def _publish_profile(self):
         if self.enabled and self.show_profile:
@@ -140,7 +150,14 @@ class DebugOverlay:
         return self.visible
 
     def _event(self, event):
-        if not self.enabled or self.key is None:
+        if not self.enabled:
+            return False
+        if (self.visible and self.key != Keyboard.F4 and event.type in (Event.KEY_PRESSED, Event.KEY_RELEASED)
+                and event.code == Keyboard.F4):
+            if event.type == Event.KEY_RELEASED:
+                self.console.toggle()
+            return True
+        if self.key is None:
             return False
         if event.type == Event.LOST_FOCUS:
             self._held = False
@@ -157,6 +174,8 @@ class DebugOverlay:
     def _sample(self, dt):
         if dt > 0:
             self._frame_time += (dt - self._frame_time) * (0.15 if self._frame_time else 1)
+            if self.show_profile:
+                self._frame_intervals.append(dt * 1000)
 
     def _begin_frame(self):
         self._chunks.clear()
@@ -230,10 +249,14 @@ class DebugOverlay:
         lines = [f'DEBUG  {self.fps:.0f} FPS  {self.frame_ms:.1f} ms',
                  f'Objects: {visible_count}/{len(self._game.objects)}  Tile chunks: {self.tile_chunks}',
                  f'Draw calls: {self.draw_calls}']
+        if self.key != Keyboard.F4:
+            lines.append('F4: Developer console')
         if self.show_profile:
             times = self._last_profile
             lines += [f'Physics: {times["physics"]:.2f} ms  Update: {times["update"]:.2f} ms',
-                      f'Draw: {times["render"]:.2f} ms  A*: {times["navigation"]:.2f} ms ({self.path_queries})']
+                      f'Streaming: {times["streaming"]:.2f} ms  Events: {times["events"]:.2f} ms',
+                      f'Draw: {times["render"]:.2f} ms  Present: {times["present"]:.2f} ms',
+                      f'A*: {times["navigation"]:.2f} ms ({self.path_queries})  Peak: {self.peak_frame_ms:.1f} ms']
         text = Text(self._font, '\n'.join(lines), 13)
         backdrop = RectangleShape((text.local_bounds.size.x + 20, text.local_bounds.size.y + 20))
         backdrop.position = (8, 8)

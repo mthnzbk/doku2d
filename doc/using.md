@@ -49,6 +49,13 @@ game.add(StatusBar(), canvas=interface)
 ile sıralanır. Eşit değerlerde kayıt sırası korunur. Kamera ekran
 merkezinde olduğunda dünya koordinatları ile ekran koordinatları aynıdır.
 
+### Y eksenine göre çizim
+
+`Canvas("World", y_sort=True)` ile aynı `z_index` değerindeki nesneler
+çizim konumlarının Y değerine göre arkadan öne sıralanır. Ayak veya gövde
+dibi nesnenin merkezinden aşağıdaysa `tree.y_sort_offset = 36` gibi bir
+dünya birimi ofseti ver. Farklı `z_index` değerleri katman farkını korur.
+
 ## Yaşam döngüsü
 
 - `on_added()` her kayıtta çalışır. `self.game` bu sırada hazırdır.

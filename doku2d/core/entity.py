@@ -36,6 +36,7 @@ class Entity(Object):
         self._scale = Vector2(1, 1)
         self._visible = True
         self._z_index = 0
+        self._y_sort_offset = 0.0
         self._process_mode = "pausable"
         self._ready_called = False
 
@@ -123,12 +124,30 @@ class Entity(Object):
 
     @property
     def transform(self):
+        return self._transform_at(self.position, self.rotation)
+
+    def _transform_at(self, position, rotation):
         transform = Transform()
         if self._canvas_group is not None:transform.combine(self._canvas_group.transform)
-        transform.translate(self.position)
-        transform.rotate(self.rotation)
+        transform.translate(position)
+        transform.rotate(rotation)
         transform.scale(self.scale)
         return transform
+
+    @property
+    def render_position(self):
+        """Position used to draw this entity."""
+        return self.position
+
+    @property
+    def render_rotation(self):
+        """Rotation used to draw this entity, in degrees."""
+        return self.rotation
+
+    @property
+    def render_transform(self):
+        """Transform used for drawing, including any physics interpolation."""
+        return self.transform
 
     @property
     def visible(self):
@@ -145,6 +164,17 @@ class Entity(Object):
     @z_index.setter
     def z_index(self, value):
         self._z_index = int(value)
+
+    @property
+    def y_sort_offset(self):
+        """Vertical offset of the world-space depth anchor, in world units."""
+        return self._y_sort_offset
+
+    @y_sort_offset.setter
+    def y_sort_offset(self, value):
+        if not isfinite(value):
+            raise ValueError("y_sort_offset must be finite")
+        self._y_sort_offset = float(value)
 
     @property
     def process_mode(self):

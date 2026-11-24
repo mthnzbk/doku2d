@@ -23,6 +23,13 @@ def mask(value):
     return value
 
 
+def _targeted_transform(entity, target_transform):
+    transform = Transform()
+    transform.combine(target_transform)
+    transform.combine(Entity.transform.fget(entity))
+    return transform
+
+
 class Light(Entity):
     _is_light=True
     def __init__(self,name=None,*,position=(0,0),color='white',energy=1,shadow=False,target=None):
@@ -58,10 +65,15 @@ class Light(Entity):
         self._target=value
     @property
     def transform(self):
-        transform=Transform()
-        if self.target is not None:transform.combine(self.target.transform)
-        transform.combine(Entity.transform.fget(self))
-        return transform
+        if self.target is None:
+            return super().transform
+        return _targeted_transform(self, self.target.transform)
+
+    @property
+    def render_transform(self):
+        if self.target is None or self.game is None or not self.game.physics_interpolation:
+            return self.transform
+        return _targeted_transform(self, self.target.render_transform)
 
 
 class PointLight(Light):
@@ -126,7 +138,9 @@ class DirectionalLight(Light):
     def max_distance(self,value):self.shadow_length=value
     @property
     def ray_direction(self):
-        transform=self.transform
+        return self._direction_at(self.transform)
+
+    def _direction_at(self, transform):
         direction=transform.transform_point(self.direction)-transform.transform_point((0,0))
         length=hypot(*direction)
         return direction/length if length else self.direction
@@ -170,12 +184,22 @@ class LightOccluder(Entity):
         self._target=value
     @property
     def transform(self):
-        transform=Transform()
-        if self.target is not None:transform.combine(self.target.transform)
-        transform.combine(Entity.transform.fget(self))
-        return transform
+        if self.target is None:
+            return super().transform
+        return _targeted_transform(self, self.target.transform)
+
     @property
-    def world_points(self):return tuple(self.transform.transform_point(p) for p in self._points)
+    def render_transform(self):
+        if self.target is None or self.game is None or not self.game.physics_interpolation:
+            return self.transform
+        return _targeted_transform(self, self.target.render_transform)
+
+    @property
+    def world_points(self):return self._points_at(self.transform)
+
+    def _points_at(self, transform):
+        return tuple(transform.transform_point(point) for point in self._points)
+
     @classmethod
     def from_body(cls,body):
         from ..physics.shapes import Box,Circle,Polygon,Segment

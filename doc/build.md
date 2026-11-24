@@ -9,6 +9,10 @@
 
 Yukarıdaki hazır paket kapsamı [SFML 3.0.2.0 dağıtım dosyalarına](https://pypi.org/project/SFML/3.0.2.0/#files) dayanır.
 
+Shader desteği bulunmayan grafik ortamlarında başlangıç oyunu, ortam rengi
+ve CanvasGroup saydamlığıyla çalışır. Dinamik ışıklar ve gölgeler bu durumda
+çizilmez. Kendi GLSL materyallerini kullanan oyunlar OpenGL shader desteği ister.
+
 ## Projeyi derle
 
 Motor deposunun kökünde derleme seçeneğini kur. Motoru wheel dosyasından
@@ -70,4 +74,6 @@ doğrulama komutunun başına `xvfb-run -a` ekle. [Sürüm notları](../CHANGELO
 Yayımlama iş akışını `v<version>` biçimindeki Git etiketi başlatır. Örneğin
 `v1.0.0rc1` etiketi, `pyproject.toml` içinde `1.0.0rc1` sürümünün bulunduğu
 commit'i göstermelidir. Etiketle paket sürümü farklıysa derleme başlamaz.
-GitHub Release açıklaması ayrıca yayımlanabilir.
+Etiketli yayım, Windows ve Linux üzerinde temiz kurulum ve bağımsız uygulama
+kontrolleri geçtikten sonra paketi PyPI'ye gönderir. GitHub Release açıklaması
+ayrıca yayımlanabilir.

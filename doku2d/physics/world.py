@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from itertools import chain
 from math import radians, degrees, exp, ceil, cos, hypot, isfinite, sin
 import pymunk
 from ..core.entity import Entity
@@ -22,6 +23,9 @@ class PhysicsWorld:
         self._space.iterations = 20
         self._shapes = {}
         self._bodies = set()
+        self._areas = set()
+        self._static_extents = {}
+        self._shape_settings = {}
         self._one_way_pairs = {}
         self._has_one_way = False
         self._substep = 0.0
@@ -43,6 +47,7 @@ class PhysicsWorld:
         return pymunk.ShapeFilter(categories=layer,mask=mask)
 
     def add(self, entity):
+        entity.reset_physics_interpolation()
         kind = entity._body_kind
         if entity.freeze:
             kind = pymunk.Body.STATIC
@@ -67,6 +72,11 @@ class PhysicsWorld:
         entity._native_body,entity._native_shape = body,shape
         self._shapes[shape] = entity
         self._bodies.add(entity)
+        self._shape_settings[entity] = self._settings(entity)
+        if entity._is_area:
+            self._areas.add(entity)
+        elif kind == pymunk.Body.STATIC:
+            self._static_extents[entity] = self._extent(shape)
         if kind != pymunk.Body.STATIC:
             body.velocity = tuple(entity._linear_velocity)
             body.angular_velocity = radians(entity._angular_velocity)
@@ -93,11 +103,15 @@ class PhysicsWorld:
         self._space.remove(shape,body)
         self._shapes.pop(shape,None)
         self._bodies.discard(entity)
+        self._areas.discard(entity)
+        self._static_extents.pop(entity, None)
+        self._shape_settings.pop(entity, None)
         entity._native_body = entity._native_shape = None
+        entity.reset_physics_interpolation()
         entity._contacts.clear()
         entity._overlaps.clear()
-        for other in tuple(self._bodies):
-            if other._is_area and entity in other._overlaps:
+        for other in tuple(self._areas):
+            if entity in other._overlaps:
                 other._overlaps.remove(entity)
                 self._emit(other,"area_exited" if entity._is_area else "body_exited",entity)
 
@@ -108,6 +122,25 @@ class PhysicsWorld:
     def reindex(self, entity):
         if entity._native_body is not None:
             self._space.reindex_shapes_for_body(entity._native_body)
+            if entity in self._static_extents:
+                self._static_extents[entity] = self._extent(entity._native_shape)
+
+    @staticmethod
+    def _extent(shape):
+        bb = shape.bb
+        return min(bb.right - bb.left, bb.top - bb.bottom)
+
+    @staticmethod
+    def _settings(entity):
+        return entity.collision_layer, entity.collision_mask, entity.friction, entity.elasticity
+
+    def _capture_poses(self):
+        for entity in self._bodies:
+            entity._previous_physics_pose = (entity._position, entity._rotation)
+
+    def _reset_interpolation(self):
+        for entity in self._bodies:
+            entity.reset_physics_interpolation()
 
     def _emit(self, entity, signal, other):
         if self.game.closed:
@@ -187,20 +220,34 @@ class PhysicsWorld:
 
     def step(self, dt):
         if not isfinite(dt) or dt<=0:raise ValueError('Physics delta must be positive and finite')
+        if self.game.physics_interpolation and not self.game._interpolating_step:
+            self._reset_interpolation()
         entities=tuple(self._bodies)
         self._has_one_way = any(entity.one_way for entity in entities)
         characters=[entity for entity in entities if getattr(entity,'_is_character',False)]
+        moving = [entity for entity in entities if entity not in self._static_extents]
         driven=[]
-        applied={entity:(entity._native_body.force,entity._native_body.torque) for entity in entities}
+        applied={}
         for entity in entities:
             body,shape=entity._native_body,entity._native_shape
-            shape_filter=self._filter(entity)
-            if shape.filter!=shape_filter:shape.filter=shape_filter
-            if shape.friction!=entity.friction:shape.friction=entity.friction
-            if shape.elasticity!=entity.elasticity:shape.elasticity=entity.elasticity
+            settings = self._settings(entity)
+            previous = self._shape_settings[entity]
+            if settings != previous:
+                if settings[:2] != previous[:2]:
+                    shape.filter = self._filter(entity)
+                if settings[2] != previous[2]:
+                    shape.friction = settings[2]
+                if settings[3] != previous[3]:
+                    shape.elasticity = settings[3]
+                self._shape_settings[entity] = settings
+        for entity in moving:
+            body=entity._native_body
+            kind = body.body_type
+            if kind == pymunk.Body.DYNAMIC:
+                applied[entity] = body.force + tuple(entity.force), body.torque + entity.torque
             entity._platform_velocity=Vector2(*body.velocity)
             entity._platform_angular_velocity=body.angular_velocity
-            if body.body_type==pymunk.Body.KINEMATIC and not entity._is_area:
+            if kind==pymunk.Body.KINEMATIC and not entity._is_area:
                 delta=Vector2(*body.position)-entity._last_step_position
                 angle=(body.angle-entity._last_step_rotation+3.141592653589793)%(2*3.141592653589793)-3.141592653589793
                 if hypot(*delta)>1e-8 or abs(angle)>1e-8:
@@ -220,28 +267,28 @@ class PhysicsWorld:
             body.angular_velocity = entity._platform_angular_velocity
             self.reindex(entity)
         for entity in characters:entity._prepare_motion(dt)
-        smallest=min((min(entity._native_shape.bb.right-entity._native_shape.bb.left,
-                          entity._native_shape.bb.top-entity._native_shape.bb.bottom)
-                      for entity in entities if not entity._is_area),default=16)
-        displacement=max((hypot(*entity._native_body.velocity)*dt for entity in entities),default=0)
+        smallest=min(chain(self._static_extents.values(),
+                           (self._extent(entity._native_shape) for entity in moving if not entity._is_area)),
+                     default=16)
+        displacement=max((hypot(*entity._native_body.velocity)*dt for entity in moving),default=0)
         count=max(4,min(64,ceil(displacement/max(.5,smallest*.25))))
         substep=dt/count
         self._substep = substep
         for _ in range(count):
+            for entity in characters:
+                entity._motion_contacts=tuple(entity._contacts)
             for entity in entities:
-                body=entity._native_body
-                if getattr(entity,'_is_character',False):entity._motion_contacts=tuple(entity._contacts)
-                if not body.is_sleeping:entity._contacts.clear()
-                if body.body_type==pymunk.Body.DYNAMIC:
-                    force,torque=applied[entity]
-                    force=force+tuple(entity.force)
-                    if force.x or force.y:body.force=force
-                    if torque+entity.torque:body.torque=torque+entity.torque
+                if entity._contacts and (entity in self._static_extents or not entity._native_body.is_sleeping):
+                    entity._contacts.clear()
+            for entity, (force, torque) in applied.items():
+                body = entity._native_body
+                if force.x or force.y:body.force=force
+                if torque:body.torque=torque
             self._space.step(substep)
         for entity,velocity,angular in driven:
             entity._native_body.velocity=tuple(velocity)
             entity._native_body.angular_velocity=angular
-        for entity in entities:
+        for entity in moving:
             body=entity._native_body
             entity._position=Vector2(*body.position)
             entity._rotation=degrees(body.angle)
@@ -319,6 +366,26 @@ class PhysicsWorld:
             if entity is not None and entity not in exclude and (areas or not entity._is_area):
                 return Collision(entity,Vector2(*hit.normal),Vector2(*hit.point),hit.alpha)
         return None
+
+    def shapecast(self, shape, start, end, *, rotation=0, mask=0xffffffff, exclude=(), areas=False):
+        """Sweep a Circle or Box in world coordinates and return its first contact."""
+        from .collision import bitmask
+        from .sweep import swept_hits
+
+        closest = None
+        excluded = tuple(exclude)
+        for native, fraction, normal, point, distance in swept_hits(
+                self._space, shape, start, end, rotation, bitmask(mask)):
+            entity = self._shapes.get(native)
+            if entity is None or entity in excluded or entity in self.game._removing:
+                continue
+            if not areas and entity._is_area:
+                continue
+            if closest is None or fraction < closest.fraction:
+                closest = Collision(entity, Vector2(*normal), Vector2(*point), fraction, distance)
+                if fraction == 0:
+                    break
+        return closest
 
     def _navigation_clear(self, start, end, radius, *, agent, ignored, tilemap):
         mask = self._filter(agent) if agent is not None else pymunk.ShapeFilter()

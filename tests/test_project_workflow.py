@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 import json
 import os
 import unittest
+from unittest.mock import Mock, call, patch
 from sfml.graphics import Color,Image,Texture,RectangleShape,RenderTexture
 import doku2d
 from doku2d import (Game,Entity,CanvasGroup,AmbientLight,CanvasModulate,DayNightCycle,
@@ -97,6 +98,27 @@ class ProjectWorkTests(unittest.TestCase):
             cycle.enabled=False;image=snapshot(game);self.assertEqual(image[4,4].r,255)
         finally:game.close()
 
+    def test_starter_style_canvas_and_hud_render_without_shaders(self):
+        from doku2d import PointLight
+
+        game = Game(size=(32, 16))
+        self.addCleanup(game.close)
+        game.add(Square(size=(16, 16)))
+        game.add(CanvasModulate(color=(52, 86, 110)))
+        game.add(PointLight(position=(8, 8), radius=8))
+        group = game.add(CanvasGroup(canvas=game.ui.canvas, opacity=.5))
+        group.add(Square(position=(16, 0), size=(12, 16)))
+        group.add(Square(position=(19, 0), size=(12, 16)))
+        with (patch('doku2d.rendering.lighting.Shader') as lighting,
+              patch('doku2d.rendering.compositing.Shader') as compositing):
+            lighting.is_available.return_value = compositing.is_available.return_value = False
+            image = snapshot(game)
+        self.assertEqual(image[8, 8], Color(52, 86, 110))
+        self.assertAlmostEqual(image[17, 8].r, 128, delta=1)
+        self.assertAlmostEqual(image[23, 8].r, 128, delta=1)
+        lighting.from_memory.assert_not_called()
+        compositing.from_memory.assert_not_called()
+
     def test_assets_share_cache_and_relative_paths_bind_to_game(self):
         with TemporaryDirectory(dir=WORKSPACE,prefix='.project-assets-') as directory:
             root=Path(directory);assets=root/'assets';assets.mkdir()
@@ -165,6 +187,37 @@ class ProjectWorkTests(unittest.TestCase):
                 stream.write('\n[storage]\ndirectory=".user-data"\n')
             self.assertEqual(run_project(project, arguments=['--frames', '2']), 0)
             self.assertTrue((project / '.user-data/settings.json').exists())
+
+    def test_vsync_uses_display_pacing_and_restores_the_software_limit(self):
+        with TemporaryDirectory() as directory:
+            project = Path(directory) / 'doku2d.toml'
+            project.write_text('[window]\nfps_limit = 50\n', encoding='utf-8')
+            self.assertFalse(ProjectConfig.load(project).vsync)
+
+            project.write_text('[window]\nfps_limit = 50\nvsync = true\n', encoding='utf-8')
+            game = Game.from_project(project)
+            window = Mock()
+            game._window = window
+            try:
+                self.assertTrue(game.vsync)
+                game._apply_frame_pacing()
+                self.assertEqual(window.method_calls, [
+                    call.set_framerate_limit(0), call.set_vertical_synchronization_enabled(True),
+                ])
+                window.reset_mock()
+                game.fps_limit = 75
+                self.assertEqual(window.method_calls, [])
+                game.vsync = False
+                self.assertEqual(window.method_calls, [
+                    call.set_vertical_synchronization_enabled(False), call.set_framerate_limit(75),
+                ])
+            finally:
+                game._window = None
+                game.close()
+
+            project.write_text('[window]\nvsync = 1\n', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'window.vsync'):
+                ProjectConfig.load(project)
 
     def test_project_configuration_validation_and_native_build_plan(self):
         with TemporaryDirectory(dir=WORKSPACE,prefix='.project-config-') as directory:

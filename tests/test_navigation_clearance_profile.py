@@ -1,5 +1,5 @@
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from sfml.graphics import RenderTexture
 
@@ -95,3 +95,21 @@ class ClearanceAndProfileTests(TestCase):
             game.render(target)
         self.assertEqual(game.debug.path_queries, 0)
         self.assertFalse(any(game.debug.profile_ms.values()))
+
+    def test_window_profile_publishes_polling_rendering_and_presentation_together(self):
+        game = Game(size=(320, 180), debug=True)
+        window = Mock(is_open=True, events=())
+        clock = Mock()
+        clock.restart.return_value.seconds = .012
+        window.display.side_effect = lambda: self.assertEqual(game.debug.profile_ms['render'], 0)
+        ticks = (0, .002, .002, .005, .005, .008, .008, .019)
+        with (patch('doku2d.rendering.targets.MeasuredWindow', return_value=window),
+              patch('doku2d.core.game.Clock', return_value=clock),
+              patch('doku2d.core.debug.perf_counter', side_effect=ticks),
+              patch.object(game, '_render_frame')):
+            game.run(max_frames=1)
+        for section, elapsed in {'events': 2, 'update': 3, 'render': 3, 'present': 11}.items():
+            self.assertAlmostEqual(game.debug.profile_ms[section], elapsed)
+        self.assertAlmostEqual(game.debug.peak_frame_ms, 12)
+        game.debug.show_profile = False
+        self.assertEqual(game.debug.peak_frame_ms, 0)

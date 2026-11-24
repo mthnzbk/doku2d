@@ -19,7 +19,7 @@ class CharacterBody(PhysicsBody):
     _body_kind=pymunk.Body.DYNAMIC
     _is_character=True
 
-    def __init__(self,name=None,*,motion_mode='floating',**options):
+    def __init__(self,name=None,*,motion_mode='floating',coyote_time=0,jump_buffer=0,**options):
         super().__init__(name,**options)
         self._up_direction=Vector2(0,-1)
         self._slide_on_ceiling=True
@@ -45,6 +45,10 @@ class CharacterBody(PhysicsBody):
         self._motor_velocity=Vector2(0,0)
         self._navigation = None
         self._drop_remaining = 0.0
+        self._coyote_remaining = 0.0
+        self._buffered_jump = None
+        self.coyote_time = coyote_time
+        self.jump_buffer = jump_buffer
         self.motion_mode=motion_mode
 
     @property
@@ -52,7 +56,7 @@ class CharacterBody(PhysicsBody):
         return self._navigation
 
     def navigate_to(self, tilemap, target, **options):
-        """Follow a TileMap route to a world point or an Entity. Return the follower."""
+        """Follow a TileMap or TileMapStream route to a world point or an Entity."""
         follower = PathFollower(self, tilemap, target, **options)
         if self.navigation is not None:
             self.navigation.stop()
@@ -67,6 +71,33 @@ class CharacterBody(PhysicsBody):
         self._motion_mode=value
         self.gravity_scale=1 if value=='grounded' else 0
         self._floor_hit=None
+        self._coyote_remaining = 0.0
+        self._buffered_jump = None
+
+    @property
+    def coyote_time(self):
+        """Seconds during which a jump is allowed after walking off the floor."""
+        return self._coyote_time
+
+    @coyote_time.setter
+    def coyote_time(self, value):
+        self._coyote_time = number(value, 'coyote_time')
+        self._coyote_remaining = min(self._coyote_remaining, self._coyote_time)
+
+    @property
+    def jump_buffer(self):
+        """Seconds during which an airborne jump request can wait for landing."""
+        return self._jump_buffer
+
+    @jump_buffer.setter
+    def jump_buffer(self, value):
+        self._jump_buffer = number(value, 'jump_buffer')
+        if self._jump_buffer == 0:
+            self._buffered_jump = None
+        elif self._buffered_jump is not None:
+            speed, remaining = self._buffered_jump
+            self._buffered_jump = (speed, min(remaining, self._jump_buffer))
+
     @property
     def up_direction(self):return Vector2(*self._up_direction)
     @up_direction.setter
@@ -143,12 +174,15 @@ class CharacterBody(PhysicsBody):
 
     def teleport(self,position):
         self.position=position
+        self.reset_physics_interpolation()
         self.velocity=(0,0)
         self._last_velocity=Vector2(0,0)
         self._floor_hit=None
         self._contacts.clear()
         self._jump_requested=False
         self._drop_remaining = 0.0
+        self._coyote_remaining = 0.0
+        self._buffered_jump = None
 
     def drop_through(self, duration=0.2):
         """Release a one-way floor and ignore one-way surfaces briefly."""
@@ -158,6 +192,8 @@ class CharacterBody(PhysicsBody):
             return False
         self._drop_remaining = float(duration)
         self._floor_hit = None
+        self._coyote_remaining = 0.0
+        self._buffered_jump = None
         self._contacts[:] = [hit for hit in self._contacts if not hit.collider.one_way]
         self._motion_contacts = tuple(hit for hit in self._motion_contacts if not hit.collider.one_way)
         if dot(self.velocity, self.up_direction) > 0:
@@ -165,12 +201,24 @@ class CharacterBody(PhysicsBody):
         return True
 
     def jump(self,speed=360):
-        speed=number(speed,'Jump speed')
-        if not self.is_on_floor() or self._jump_requested:return False
-        velocity=self.velocity
-        self.velocity=velocity+self.up_direction*(speed-dot(velocity,self.up_direction))
-        self._jump_requested=True
-        return True
+        """Start a jump and return True, or queue it when jump buffering is enabled."""
+        speed = number(speed, 'Jump speed')
+        if self.game is None or self._jump_requested:
+            return False
+        if self.is_on_floor() or self._coyote_remaining > 0:
+            self._start_jump(speed)
+            return True
+        if self.motion_mode == 'grounded' and self.jump_buffer > 0:
+            self._buffered_jump = (speed, self.jump_buffer)
+        return False
+
+    def _start_jump(self, speed):
+        velocity = self.velocity
+        up = self.up_direction
+        self.velocity = velocity + up * (speed - dot(velocity, up))
+        self._jump_requested = True
+        self._coyote_remaining = 0.0
+        self._buffered_jump = None
 
     def move_and_slide(self):
         if self.game is None:raise RuntimeError('Add the character to a Game first')
@@ -258,8 +306,24 @@ class CharacterBody(PhysicsBody):
             if inward<0:self.linear_velocity=velocity-hit.normal*inward
         self._real_velocity=(self.position-self._motion_start)/dt
         self._last_velocity=self.velocity
+        if self._jump_requested:
+            self._coyote_remaining = 0.0
+        elif hit is not None or was_floor:
+            self._coyote_remaining = self.coyote_time
+        elif self._coyote_remaining > 0:
+            self._coyote_remaining = max(0.0, self._coyote_remaining - dt)
+        jumped = self._jump_requested
         self._jump_requested=False
         self._motor_active=False
+        if self._buffered_jump is not None:
+            speed, remaining = self._buffered_jump
+            remaining -= dt
+            if remaining <= 0:
+                self._buffered_jump = None
+            elif hit is not None and not jumped:
+                self._start_jump(speed)
+            else:
+                self._buffered_jump = (speed, remaining)
 
 
 class RigidBody(PhysicsBody):

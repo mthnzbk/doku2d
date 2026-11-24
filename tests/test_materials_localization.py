@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from sfml.graphics import Color, Image, RenderTexture, Texture
+from sfml.graphics import Color, Image, RenderTexture, Shader, Texture
 
 from doku2d import AmbientLight, Button, CanvasGroup, Game, HBox, Label, LineEdit, OptionButton
 from doku2d import RichLabel, ShaderMaterial, Sprite, tr
@@ -33,6 +33,8 @@ def square(color):
 
 class MaterialsLocalizationTests(TestCase):
     def test_shader_file_and_independent_parameters_on_sprites(self):
+        if not Shader.is_available():
+            self.skipTest('GLSL materials require OpenGL shaders')
         with TemporaryDirectory(dir=Path.cwd()) as directory:
             game = Game(size=(36, 12), asset_root=directory)
             self.addCleanup(game.close)
@@ -50,6 +52,8 @@ class MaterialsLocalizationTests(TestCase):
             self.assertEqual(image[18, 5], Color.GREEN)
 
     def test_group_and_world_effects_preserve_alpha_and_leave_hud_separate(self):
+        if not Shader.is_available():
+            self.skipTest('GLSL effects require OpenGL shaders')
         game = Game(size=(36, 24))
         self.addCleanup(game.close)
         group = game.add(CanvasGroup(opacity=.5))

@@ -114,6 +114,55 @@ görünen parçalar hazırlanır/çizilir; hücre değişince ilgili parça yeni
 Animasyon kareleri değişince geometrisi yenilenir. Infinite haritalarda bu
 parçalar Tiled'ın kaydettiği chunk boyutundan bağımsızdır.
 
+## Büyük haritalarda bölge yükleme
+
+`TileMapStream` oyuncuyu veya bir konum işlevini izler. Yakındaki `TileMap`
+bölgelerini oyuna ekler, uzaklaşınca onların katmanlarını, fizik gövdelerini ve
+bölgeye eklenen nesneleri kaldırır. Her `TileMap` kendi çizim chunk'larını
+önbelleğe almaya devam eder.
+
+```python
+from doku2d import TileMapStream
+
+world = game.add(TileMapStream.from_directory(
+    'res://regions', size=(10_000, 10_000), tile_size=(16, 16),
+  chunk_size=(32, 32), target=player, radius=1, loads_per_step=1, lookahead=8,
+))
+```
+
+Tiled bölgelerini `0_0.tmj`, `1_0.tmj`, `0_1.tmj` biçiminde adlandır.
+Her dosya kendi bölgesinin yerel `(0, 0)` koordinatında başlar. Yükleyici
+`.tmx` dosyalarını da tanır. Tiled verileri hedefin gittiği yönde arka planda
+ayrıştırılır. `lookahead` ileri bakma mesafesini karo cinsinden ayarlar. Sıfır
+değeri yön tahminini kapatır. Bölgenin TileMap'i ve nesneleri oyun iş parçacığında
+oluşturulur. Aniden gereken bölge, örneğin ışınlanınca, hazırlığın bitmesini
+bekleyerek veya doğrudan hazırlanarak yüklenir. Bölgeler aynı karo dokusunu
+kullanıyorsa bu doku paylaşılır.
+
+`cover_view=True` ile kamera, hedefin yükleme yarıçapı dışındaki bölgeleri de
+gösterdiği sürece bellekte tutar. Kameraya yeni giren bölgeler çizimden önce
+yüklenir. Bu seçenek, görünür alanı kapatmak için `loads_per_step` bütçesini
+ve hedefin normal bölge sayısını aşabilir.
+
+Prosedürel bir dünya için kurucuya `loader(origin, size)` işlevini ver.
+`prepare=prepare_region` verirsen motor `prepare_region(origin, size)` işlevini
+arka planda çalıştırır ve `loader(origin, size, prepared)` işlevine sonucunu
+aktarır. Hazırlıkta saf veri üret. TileMap, doku ve fizik gövdesi oluşturmayı
+yükleyiciye bırak.
+`origin` ve `size` karo birimindedir. Son bölge harita sınırına geliyorsa
+`size` daha küçük olabilir. İşlev yerel bir `TileMap`, ek ağaç ve gövdelerle
+birlikte `TileMapChunk(tilemap, entities)` veya boş bölge için `None` döndürür.
+Her yüklemede yeni nesneler üret. Oyuncunun bir bölgeye yaptığı kalıcı
+değişiklikleri oyun verisinde saklayıp yükleyicide uygulayabilirsin.
+
+`radius=1` merkezle birlikte en fazla 3 × 3 bölge tutar. Motor yeni bölgeleri
+en yakından başlayarak fizik adımlarına böler. Açılış veya hızlı seyahatte
+çevrenin hemen hazır olması için `world.refresh(full=True)` çağır.
+`world.loaded_chunks` o anda etkin haritaları, `world.world_bounds` tüm
+dünyanın piksel sınırını verir. Bölge verisi ve çarpışmalar dünya dışındaki
+noktalara taşmaz. Dünya başlangıcını kurucunun `position` parametresiyle
+seçebilirsin.
+
 ## Kamera
 
 ```python
@@ -261,6 +310,26 @@ içindir. Gövdenin çarpışma şeklinden yarıçap çıkarır ve dar geçitler
 Kutu ve çokgenlerde şekli çevreleyen çember kullanılır. İstersen
 `navigate_to(tilemap, hedef, radius=6)` ile dünya birimi cinsinden açık bir
 değer verebilirsin.
+
+### Bölgeler arası yol bulma
+
+```python
+follower = npc.navigate_to(world_stream, hedef, speed=120, diagonal=True)
+```
+
+`TileMapStream` yüklenmiş ve henüz yüklenmemiş bölgelerin karo verisini
+okuyarak ortak bir rota bulur. Eksik bölgeler geçilemez. NPC, hareket
+ederken yalnızca bulunduğu ve bir sonraki rota bölgesinin yüklü kalmasını
+ister. Bir karo düzenlenirse rota yeniden hesaplanır.
+
+`world_stream.find_path((2, 3), (150, 30))` tüm stream’in karo
+koordinatlarını kullanır. Dünya noktaları için `find_world_path()` kullan.
+Hizalanmış bölgeler aynı karo boyutunu paylaşır. Karo ve harita nesnesi
+engelleri uzak bölgelerde de hesaba katılır. Çalışma sırasında eklenmiş
+bağımsız fizik gövdeleri bölge yüklendiğinde çarpışma sorgusuna katılır.
+Arama oyun iş parçacığında çalışır ve varsayılan olarak 16.384 genişletme
+ile sınırlıdır. Doğrudan `find_path(..., max_nodes=...)` çağrısında bütçeyi
+değiştirebilirsin. Yol bulunamazsa veya bütçe biterse boş liste döner.
 
 Takipçi aynı dünyadaki hareketli ve sabit gövdeleri çarpışma filtrelerine göre
 hesaba katar. Sensörler engel değildir. Fizik gövdesi hedefse NPC yanına kadar

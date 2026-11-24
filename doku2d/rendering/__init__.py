@@ -9,8 +9,9 @@ from .other import Marker
 from .shader import ShaderMaterial
 from .atlas import AtlasRegion, SpriteAtlas
 from .screen import ScreenNotifier
+from .tilemapstream import TileMapChunk, TileMapStream
 
 __all__ = ["AutoTile", "Camera", "Light", "DirectionalLight", "PointLight", "LightOccluder",
            "Particles", "MapData", "MapObject", "TileCell", "TiledParser", "TileLayer", "TileSet", "TileMap",
            "Sprite", "CanvasGroup", "CanvasModulate", "AmbientLight", "DayNightCycle", "Marker", "ShaderMaterial",
-           "AtlasRegion", "SpriteAtlas", "ScreenNotifier"]
+           "AtlasRegion", "SpriteAtlas", "ScreenNotifier", "TileMapChunk", "TileMapStream"]

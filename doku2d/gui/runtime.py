@@ -2,6 +2,8 @@ from dataclasses import replace
 from sfml.graphics import Rect
 from sfml.window import Event, Keyboard
 from ..core import Canvas
+from .base import Control
+from .dragdrop import _DragDrop
 from .theme import Theme
 
 
@@ -26,6 +28,7 @@ class UI:
         self.popup = None
         self._actions = {}
         self._down_pointers = set()
+        self.drag_drop = _DragDrop(self)
 
     @property
     def theme(self):
@@ -74,6 +77,7 @@ class UI:
             control.focus_entered.emit()
 
     def release(self, control):
+        self.drag_drop.release(control)
         if self.focus is control:
             self.set_focus(None)
         if self.hover is control:
@@ -95,6 +99,7 @@ class UI:
             if control and (control.game is not self.game or not control.visible
                             or control.disabled or not control.can_process()):
                 self.release(control)
+        self.drag_drop.prune()
 
     def _hit(self, position):
         return next((obj for obj in reversed(self.controls())
@@ -103,11 +108,16 @@ class UI:
     def handle_event(self, event):
         self.arrange()
         if event.type == Event.LOST_FOCUS:
+            self.drag_drop.cancel(lost_focus=True)
             for control in tuple(self.capture.values()):
                 self.release(control)
             self.set_focus(None)
             self._down_pointers.clear()
             return False
+        if (event.type == Event.KEY_PRESSED and event.code == Keyboard.ESCAPE
+                and self.drag_drop.active is not None):
+            self.drag_drop.cancel()
+            return True
         pointer_types = (Event.MOUSE_MOVED, Event.MOUSE_BUTTON_PRESSED,
                          Event.MOUSE_BUTTON_RELEASED, Event.MOUSE_WHEEL_SCROLLED,
                          Event.TOUCH_BEGAN, Event.TOUCH_MOVED, Event.TOUCH_ENDED)
@@ -119,8 +129,6 @@ class UI:
             width, height = self.game.size
             inside = 0 <= logical.x < width and 0 <= logical.y < height
             event = _LogicalPointerEvent(event, logical)
-            if self.popup is not None and self.popup._popup_event(event):
-                return True
             touch = event.type in (Event.TOUCH_BEGAN, Event.TOUCH_MOVED, Event.TOUCH_ENDED)
             pointer = event.finger+1 if touch else 0
             down = event.type in (Event.MOUSE_BUTTON_PRESSED, Event.TOUCH_BEGAN)
@@ -129,6 +137,12 @@ class UI:
                 self._down_pointers.add(pointer)
             elif up:
                 self._down_pointers.discard(pointer)
+            moved = event.type in (Event.MOUSE_MOVED, Event.TOUCH_MOVED)
+            primary_up = up and getattr(event, 'button', 0) == 0
+            if self.drag_drop.pointer(pointer, position, inside=inside, moved=moved, released=primary_up):
+                return True
+            if self.popup is not None and self.popup._popup_event(event):
+                return True
             target = self.capture.get(pointer) or (self._hit(position) if inside else None)
             if (target is not None and getattr(target, "passby_press", False)
                     and pointer in self.capture and not target.contains(position)):
@@ -158,8 +172,12 @@ class UI:
                 return target.mouse_filter == "stop"
             point = target.local_point(position)
             if down:
-                if target._pointer_down(point, getattr(event, "button", 0), pointer):
+                button = getattr(event, "button", 0)
+                if target._pointer_down(point, button, pointer):
                     self.capture[pointer] = target
+                if button == 0 and (target.drag_source is not None
+                                    or type(target).get_drag_data is not Control.get_drag_data):
+                    self.drag_drop.arm(target, pointer, position)
             elif event.type in (Event.MOUSE_MOVED, Event.TOUCH_MOVED):
                 target._pointer_move(point, pointer)
             elif event.type in (Event.MOUSE_BUTTON_RELEASED, Event.TOUCH_ENDED):
@@ -210,3 +228,4 @@ class UI:
     def draw_popup(self, target):
         if self.popup and self.popup.visible:
             self.popup._render_popup(target)
+        self.drag_drop.draw(target)

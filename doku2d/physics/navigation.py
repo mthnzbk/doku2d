@@ -3,7 +3,7 @@ from heapq import heappop, heappush
 from math import sqrt
 
 
-def grid_path(start, goal, walkable, *, diagonal, can_cross=None):
+def grid_path(start, goal, walkable, *, diagonal, can_cross=None, max_nodes=None):
     if not walkable(start) or not walkable(goal):
         return []
 
@@ -19,6 +19,7 @@ def grid_path(start, goal, walkable, *, diagonal, can_cross=None):
     queue = [(first, first, 0, start)]
     costs = {start: 0}
     parents = {}
+    expanded = 0
     while queue:
         _, _, cost, current = heappop(queue)
         if cost != costs[current]:
@@ -29,6 +30,9 @@ def grid_path(start, goal, walkable, *, diagonal, can_cross=None):
                 current = parents[current]
                 path.append(current)
             return path[::-1]
+        if max_nodes is not None and expanded >= max_nodes:
+            break
+        expanded += 1
 
         x, y = current
         for dx, dy in directions:

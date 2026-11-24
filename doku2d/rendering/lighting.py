@@ -4,6 +4,7 @@ from sfml.graphics import (Color,Image,Texture,RenderStates,Shader,Sprite,
                            Vertex,VertexArray,PrimitiveType,ConvexShape,BLEND_ADD,BLEND_NONE)
 from sfml.system import Vector2
 from .light import PointLight,DirectionalLight,color
+from .shader import draw_tinted_texture
 
 COMPOSITE=b'''
 uniform sampler2D scene;
@@ -46,10 +47,11 @@ def edges(points,closed):return list(zip(points,points[1:]+points[:1])) if close
 
 class LightingRenderer:
     def __init__(self,game):
-        if not Shader.is_available():raise RuntimeError('Canvas lighting requires OpenGL shader support')
         self.game=game;self._size=None;self._scene=None;self._lights=None;self._scratch=None
-        self._shader=Shader.from_memory(fragment=COMPOSITE)
-        self._energy_shader=Shader.from_memory(fragment=ENERGY);self._gradients={}
+        self._shader=self._energy_shader=None;self._gradients={}
+        if Shader.is_available():
+            self._shader=Shader.from_memory(fragment=COMPOSITE)
+            self._energy_shader=Shader.from_memory(fragment=ENERGY)
     def _resize(self,size):
         size=tuple(map(int,size))
         if size!=self._size:
@@ -71,11 +73,11 @@ class LightingRenderer:
         return self._gradients[key]
     def _point(self,light,occluders):
         radius=light.radius*light.texture_scale
-        center=light.offset;transform=light.transform;inverse=transform.inverse
+        center=light.offset;transform=light.render_transform;inverse=transform.inverse
         segments=[];angles=[i*2*pi/96 for i in range(96)]
         if light.shadow:
             for occluder in occluders:
-                points=[inverse.transform_point(p) for p in occluder.world_points]
+                points=[inverse.transform_point(p) for p in self._occluder_points(occluder)]
                 if occluder.closed and inside(center,points):return
                 left,right=min(p.x for p in points),max(p.x for p in points)
                 top,bottom=min(p.y for p in points),max(p.y for p in points)
@@ -109,9 +111,11 @@ class LightingRenderer:
     def _directional(self,light,occluders,view):
         scratch=self._scratch;scratch.view=view;scratch.clear(light.color)
         if light.shadow:
-            extension=light.ray_direction*light.shadow_length
+            direction = (light._direction_at(light.render_transform)
+                         if self.game.physics_interpolation else light.ray_direction)
+            extension=direction*light.shadow_length
             for occluder in occluders:
-                points=list(occluder.world_points)
+                points=list(self._occluder_points(occluder))
                 if occluder.closed:
                     from .tilecollision import convex_parts
                     polygons=convex_parts(points)
@@ -129,18 +133,29 @@ class LightingRenderer:
         self._energy_shader.set_uniform('energy',light.energy)
         self._lights.draw(sprite,RenderStates(blend_mode=BLEND_ADD,shader=self._energy_shader))
         self._lights.view=previous
+
+    def _occluder_points(self, occluder):
+        if self.game.physics_interpolation:
+            return occluder._points_at(occluder.render_transform)
+        return occluder.world_points
     def render(self,target,canvas,objects,draw_objects):
+        ambient=color(canvas.ambient)
+        for obj in objects:
+            if getattr(obj,'_is_canvas_modulate',False) and obj.enabled:
+                tint=color(obj.color)
+                ambient=Color(round(ambient.r*tint.r/255),round(ambient.g*tint.g/255),round(ambient.b*tint.b/255),round(ambient.a*tint.a/255))
+        if self._shader is None and ambient == Color.WHITE:
+            draw_objects(target,objects,canvas)
+            return
         self._resize(target.size)
         view=self.game.make_view(canvas)
         scene = self._scene
         scene.reset_GL_states();scene.view=view;scene.clear(Color.TRANSPARENT)
         draw_objects(scene,objects,canvas)
         scene.display()
-        ambient=color(canvas.ambient)
-        for obj in objects:
-            if getattr(obj,'_is_canvas_modulate',False) and obj.enabled:
-                tint=color(obj.color)
-                ambient=Color(round(ambient.r*tint.r/255),round(ambient.g*tint.g/255),round(ambient.b*tint.b/255),round(ambient.a*tint.a/255))
+        if self._shader is None:
+            draw_tinted_texture(self.game, target, scene.texture, ambient)
+            return
         active = [obj for obj in objects if getattr(obj, '_is_light', False)
                   and obj.enabled and obj.energy > 0 and obj.light_mask & canvas.light_mask
                   and (obj.target is None or obj.target.game is self.game)]

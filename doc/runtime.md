@@ -123,6 +123,21 @@ vardır. JSON/map sonuçları bağımsız kopyalardır. Unload, halen kullanıla
 örneklerini bozmaz; sonraki yüklemede yeni örnek oluşturur. Game kapanınca cache
 temizlenir. Uzun müziklerin stream oynatımı ayrı ses örnekleri kullanır.
 
+Kare döngüsünü bekletmeden bir sonraki bölümün kaynaklarını hazırla:
+
+```python
+game.resources.preloads_per_frame = 2
+loading = game.resources.preload_async("res://tiles.png", "res://level.tmj")
+# update() içinde loading.progress ile yükleme göstergesini güncelle.
+# loading.done olduğunda loading.errors boşsa kaynaklar kullanıma hazırdır.
+```
+
+`Game.update()` hazırlanan kaynakları kare bütçesiyle önbelleğe alır. Dokular
+arka planda çözülür ve oyun iş parçacığında ekran kartına aktarılır. Aynı kaynağı
+isteyen eşzamanlı ön yüklemeler hazırlığı paylaşır. `errors`, başarısız veya
+iptal edilen kaynakların mutlak yollarını hatalarıyla eşler. Tek başına
+`Resources` kullanırken oyun iş parçacığından `update_preloads()` çağır.
+
 ## Kayıt ve ayarlar
 
 ```python
@@ -198,6 +213,24 @@ TileMap görünür parçaların çizim verisini saklar. Animasyon karesi değiş
 ilgili görünür parçalar yenilenir. Yalnızca ortam rengi kullanılan Canvas, ışık
 biriktirme yüzeyine ihtiyaç duymaz.
 
+### Yükleme ekranlı bölüm geçişi
+
+```python
+def build_next(scope):
+    scope.add(Player())
+
+transition = game.transition(build_next, old_scope=current_scope,
+                             preload=["res://next_level.tmj", "res://terrain.png"],
+                             loading_text="Yükleniyor")
+transition.finished.connect(on_level_ready)  # on_level_ready(new_scope)
+transition.failed.connect(on_level_error)     # on_level_error(error)
+```
+
+Motor ekranı karartır, kaynakları hazırlar, yeni scope'u kurar ve ekranı açar.
+`prepare=` ile ek veri hazırlığını arka planda yapabilirsin. Bu durumda
+kurucu `build_next(scope, prepared)` biçimini alır. `progress` yüklemenin
+0–1 aralığındaki durumunu verir. Kurulum başarısız olursa eski scope açık kalır.
+
 ## Motorun debug katmanı
 
 ```python
@@ -213,11 +246,16 @@ nesne sayısı ve çizilen TileMap parça sayısını gösterir. Fizik şekiller
 kamera sınırlarını ve çizilen karo parçalarını da işaretler. `show_stats`,
 `show_collisions`, `show_camera` ve `show_chunks` ayrı ayrı değiştirilebilir.
 
-F3 ayrıca son çizilen karedeki fizik, oyun güncellemesi, çizim ve A* sürelerini
-milisaniye olarak gösterir. Bunlar CPU süreleridir. A* fizik veya güncelleme
-içinden çağrıldığında kendi satırında sayılır. Yanındaki sayı o karedeki yol
-sorgusu sayısıdır. Koddan `game.debug.profile_ms` ve `game.debug.path_queries`
-ile okunabilir. `game.debug.show_profile = False` süre toplamayı da kapatır.
+F3 son tamamlanan karede olay işleme, fizik, oyun güncellemesi, bölge yükleme,
+çizim, A* ve ekran sunumu sürelerini milisaniye olarak gösterir.
+`Present` pencerenin ekran yenilemesini ya da FPS sınırlayıcısını beklediği
+süreyi de içerir. Bölge yükleme ve A*, çağrıldıkları bölümün süresinden düşülür.
+A* yanındaki sayı o karedeki yol sorgusu sayısıdır.
+
+`Peak`, son 120 ölçümdeki en uzun kare aralığıdır. Bu değer
+`game.debug.peak_frame_ms` ile okunur. Bölümlerin süreleri `game.debug.profile_ms`,
+yol sorgusu sayısı ise `game.debug.path_queries` üzerinden okunur.
+`game.debug.show_profile = False` süre toplamayı kapatır.
 
 F3'teki `Draw calls`, son karede oyun penceresine ve motorun ara yüzeylerine
 yapılan çizim çağrılarını sayar. Debug katmanının kendi çizimi sayıya girmez.
@@ -325,3 +363,32 @@ açılışta aynı adla `add_bus` çağırınca uygulanır.
 [preferences]
 persist = true
 ```
+
+### Ayar menüsünde tuş yakalama
+
+```python
+def change_jump():
+    status.text = 'Yeni tuşa veya gamepad düğmesine bas'
+    game.input.capture_binding('jump', update_jump_label)
+
+def update_jump_label(binding):
+    status.text = 'İptal edildi' if binding is None else 'Zıplama tuşu değişti'
+
+change_button.pressed.connect(change_jump)
+```
+
+`capture_binding()` önceden tanımlanmış bir eylem için bir sonraki klavye
+tuşunu, gamepad düğmesini veya eşik üstüne çıkan eksen hareketini yakalar.
+Varsayılan eksen eşiği `0.65`. Yeni girdi mevcut atamaların yerini alır.
+Mevcut tuşları da korumak için `append=True` kullan. Gamepad atamaları
+yakalandığı kontrolcü numarasına bağlanmaz.
+
+Escape veya `cancel_binding_capture()` isteği iptal eder. Pencere odağını
+kaybettiğinde de istek kapanır. Geri çağrı başarıda yeni atamayı, iptalde
+`None` alır. Escape'i atayabilmek için `cancel_key=None` ver.
+Aynı anda bir eylem girdi bekleyebilir. `binding_capture_action` ile
+hangisinin beklediğini öğrenebilirsin.
+
+Yakalanan girdi aynı anda oyun, yazı alanı veya F3 kısayolunu tetiklemez.
+Yeni atama, tuş bırakılıp yeniden basıldığında kullanılabilir.
+`persist_preferences=True` seçiliyse atama mevcut tercih kaydına girer.

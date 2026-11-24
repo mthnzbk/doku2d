@@ -1,8 +1,9 @@
 from unittest import TestCase
 
-from sfml.graphics import Color, Image, RectangleShape, Texture
+from sfml.graphics import Color, Image, RectangleShape, Shader, Texture
 
-from doku2d import AmbientLight, AnimatedSprite, CanvasGroup, Entity, Game, Particles, ShaderMaterial, Sprite
+from doku2d import (AmbientLight, AnimatedSprite, CanvasGroup, Entity, Game, Particles,
+                    ShaderMaterial, Sprite, TileMap, TileSet)
 
 
 def texture(color, size=(8, 8)):
@@ -18,7 +19,29 @@ def snapshot(game, size=None):
 
 
 class RenderBatchingTests(TestCase):
+    def test_square_atlas_tiles_share_a_chunk_draw_and_refresh_on_offset_change(self):
+        game = Game(size=(32, 32), debug=True)
+        self.addCleanup(game.close)
+        tileset = TileSet(texture(Color.RED), tile_size=(8, 8))
+        tilemap = TileMap(tile_set=tileset)
+        ground = tilemap.add_layer('Ground')
+        for y in range(3):
+            ground.set_cell((0, y), 0)
+        game.add(tilemap)
+        game.flush_deferred()
+        frame, calls = snapshot(game)
+        self.assertEqual(calls, 1)
+        self.assertEqual(frame[1, 17], Color.RED)
+
+        tileset.offset = (4, 0)
+        frame, calls = snapshot(game)
+        self.assertEqual(calls, 3)
+        self.assertEqual(frame[1, 17], Color.BLACK)
+        self.assertEqual(frame[5, 17], Color.RED)
+
     def test_sprite_runs_preserve_order_and_leave_custom_material_separate(self):
+        if not Shader.is_available():
+            self.skipTest('Custom shader materials require OpenGL shaders')
         game = Game(size=(32, 24), debug=True)
         self.addCleanup(game.close)
         red = texture(Color(255, 10, 10, 150))
@@ -92,6 +115,8 @@ class RenderBatchingTests(TestCase):
                 self.assertEqual(batched[0, 0], Color.BLACK)
 
     def test_draw_count_includes_offscreen_passes_and_custom_draws(self):
+        if not Shader.is_available():
+            self.skipTest('The custom canvas pass requires OpenGL shaders')
         game = Game(size=(40, 32), debug=True)
         self.addCleanup(game.close)
         game.debug.visible = True

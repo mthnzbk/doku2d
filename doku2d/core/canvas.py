@@ -5,11 +5,12 @@ from .entity import Entity
 
 class Canvas:
     """Shared drawing settings, independent of object ownership or lifecycle."""
-    def __init__(self, name="World", *, order=0, screen_space=False, parallax=(1, 1)):
+    def __init__(self, name="World", *, order=0, screen_space=False, parallax=(1, 1), y_sort=False):
         self.name = name
         self.order = order
         self.screen_space = screen_space
         self.parallax = parallax
+        self.y_sort = y_sort
         self._ambient=Color.WHITE
         self._light_mask=1
         self._material = None
@@ -55,6 +56,15 @@ class Canvas:
     @parallax.setter
     def parallax(self, value):
         self._parallax = Entity._vector(value)
+
+    @property
+    def y_sort(self):
+        """Use depth anchors to order objects on each z_index in this canvas."""
+        return self._y_sort
+
+    @y_sort.setter
+    def y_sort(self, value):
+        self._y_sort = bool(value)
 
     @property
     def ambient(self):return Color(self._ambient.r,self._ambient.g,self._ambient.b,self._ambient.a)

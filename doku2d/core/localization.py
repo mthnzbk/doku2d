@@ -76,6 +76,16 @@ class Localization:
     def load_catalog(self, locale, path):
         self.add_catalog(locale, self._resources.get_json(path))
 
+    @property
+    def locales(self):
+        """Language tags with loaded catalogs."""
+        return tuple(sorted(self._catalogs))
+
+    def has_translation(self, key, *, locale=None):
+        """Check the given language and its base language for a key."""
+        locale = self.locale if locale is None else _locale_name(locale)
+        return any(key in self._catalogs.get(tag, {}) for tag in (locale, locale.split('-')[0]))
+
     def resolve(self, value):
         if not isinstance(value, LocalizedText):
             return str(value)

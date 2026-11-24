@@ -27,6 +27,9 @@ class Control(Entity):
     gui_input = Signal()
     focus_entered = Signal()
     focus_exited = Signal()
+    drag_started = Signal()
+    drag_finished = Signal()
+    dropped = Signal()
     _is_control = True
 
     def __init__(self, name=None):
@@ -47,6 +50,8 @@ class Control(Entity):
         self.hovered = False
         self._pressed = False
         self._disabled = False
+        self.drag_source = None
+        self.drop_filter = None
 
     @property
     def visible(self):
@@ -249,6 +254,21 @@ class Control(Entity):
 
     def _cancel_pointer(self):
         self._pressed = False
+
+    @property
+    def drop_hovered(self):
+        return self.game is not None and self.game.ui.drag_drop.target is self
+
+    def get_drag_data(self, position):
+        """Return a payload (or DragData) for a drag starting at this local point."""
+        return self.drag_source(position) if self.drag_source is not None else None
+
+    def can_drop_data(self, position, data):
+        """Check whether a payload can be dropped at this local point."""
+        return self.drop_filter is not None and bool(self.drop_filter(position, data))
+
+    def drop_data(self, position, data):
+        self.dropped.emit(data, position)
 
     def _key(self, event):
         return False

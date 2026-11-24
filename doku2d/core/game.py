@@ -30,7 +30,8 @@ class Game:
                  physics_fps=60, services=None, project_root=None, asset_root=None,
                  save_dir=None, app_id=None, window_size=None, scale_mode="fit",
                  bar_color=Color.BLACK, theme=None, debug=False, debug_key=Key.F3,
-                 persist_preferences=False, locale="en", fallback_locale="en", catalogs=None):
+                 persist_preferences=False, locale="en", fallback_locale="en", catalogs=None,
+                 physics_interpolation=False, vsync=False):
         self._window = None
         self._closed = False
         self._running = True
@@ -39,11 +40,13 @@ class Game:
         self._pending = {}
         self._scopes = set()
         self._active_scope = None
+        self._transition = None
         self._surface = None
         self.batching = True
         self.culling = True
         self._sprite_batches = WeakKeyDictionary()
         self._screen_notifiers = {}
+        self._tilemap_streams = {}
         self._window_size = None
         self.scale_mode = scale_mode
         self.bar_color = bar_color
@@ -59,6 +62,8 @@ class Game:
         self._input = Input()
         self._debug = DebugOverlay(self, enabled=debug, key=debug_key)
         self._physics = None
+        self._interpolating_step = False
+        self._physics_interpolation = bool(physics_interpolation)
         self._lighting = None
         self._canvas_effect = None
         self._world = Canvas()
@@ -87,6 +92,7 @@ class Game:
         if window_size is not None:
             self.window_size = window_size
         self.fps_limit = fps_limit
+        self.vsync = vsync
         self.physics_fps = physics_fps
         for name, source in (services or {}).items():
             self.services.add(name, source)
@@ -257,7 +263,26 @@ class Game:
 
     @paused.setter
     def paused(self, value):
-        self._paused = bool(value)
+        value = bool(value)
+        if self._paused != value and self._physics_interpolation and self._physics is not None:
+            self._physics._reset_interpolation()
+        self._paused = value
+
+    @property
+    def physics_interpolation(self):
+        """Draw moving physics bodies between their last two fixed poses."""
+        return self._physics_interpolation
+
+    @physics_interpolation.setter
+    def physics_interpolation(self, value):
+        value = bool(value)
+        if value != self._physics_interpolation and self._physics is not None:
+            self._physics._reset_interpolation()
+        self._physics_interpolation = value
+
+    @property
+    def _physics_blend(self):
+        return min(1.0, self._accumulator * self.physics_fps)
 
     @property
     def camera(self):
@@ -321,7 +346,27 @@ class Game:
         if not isfinite(value) or int(value) != value or value < 0:
             raise ValueError("fps_limit must be a nonnegative integer")
         self._fps_limit = int(value)
-        if self.window:
+        if self.window is not None and not self.vsync:
+            self.window.set_framerate_limit(self._fps_limit)
+
+    @property
+    def vsync(self):
+        """Synchronize frame presentation with the display's refresh cycle."""
+        return self._vsync
+
+    @vsync.setter
+    def vsync(self, value):
+        self._vsync = bool(value)
+        if self.window is not None:
+            self._apply_frame_pacing()
+
+    def _apply_frame_pacing(self):
+        # SFML's software limiter and vertical synchronization must run separately.
+        if self.vsync:
+            self.window.set_framerate_limit(0)
+            self.window.set_vertical_synchronization_enabled(True)
+        else:
+            self.window.set_vertical_synchronization_enabled(False)
             self.window.set_framerate_limit(self.fps_limit)
 
     @property
@@ -340,7 +385,7 @@ class Game:
 
     @clear_color.setter
     def clear_color(self, value):
-        self._clear_color = value
+        self._clear_color = value if isinstance(value, Color) else Color(*value)
 
     def create_tween(self,*,owner=None):
         from ..animation.tween import Tween
@@ -349,6 +394,25 @@ class Game:
 
     def create_scope(self):
         return EntityScope(self)
+
+    def transition(self, build, *, old_scope=None, preload=(), prepare=None,
+                   fade_out=.25, fade_in=.25, loading_text='Loading'):
+        """Fade out, prepare assets, build a new scope, and fade back in."""
+        from .transition import Transition
+        if self._transition is not None:
+            raise RuntimeError('A transition is already active')
+        if old_scope is not None and (old_scope.game is not self or old_scope.closed):
+            raise ValueError('Old scope must be open and belong to this game')
+        if isinstance(preload, (str, Path)):
+            preload = (preload,)
+        transition = Transition(build, old_scope=old_scope, preload=tuple(preload), prepare=prepare,
+                                fade_out=fade_out, fade_in=fade_in, loading_text=loading_text)
+        self._transition = transition
+        try:
+            return self.add(transition, persistent=True)
+        except Exception:
+            self._transition = None
+            raise
 
     @contextmanager
     def _using_scope(self, scope):
@@ -546,13 +610,24 @@ class Game:
             self._flushing = False
 
     def _process(self, method, dt, signal):
+        default = getattr(Entity, method)
+        frame_update = method == "update"
         self._dispatching += 1
         try:
             signal.emit(dt)
             for obj in self.objects:
-                if obj.game is self and obj not in self._removing and obj.can_process():
+                cls = type(obj)
+                has_advance = frame_update and (cls._advance is not Entity._advance or '_advance' in obj.__dict__)
+                has_update = getattr(cls, method) is not default or method in obj.__dict__
+                if not (has_advance or has_update) or obj.game is not self or obj in self._removing or not obj.can_process():
+                    continue
+                if obj.scope is self._active_scope:
+                    if has_advance:
+                        obj._advance(dt)
+                    getattr(obj, method)(dt)
+                else:
                     with self._using_scope(obj.scope):
-                        if method == "update":
+                        if has_advance:
                             obj._advance(dt)
                         getattr(obj, method)(dt)
         finally:
@@ -564,7 +639,12 @@ class Game:
             raise RuntimeError("Game is closed")
         if not isfinite(dt) or dt < 0:
             raise ValueError("Delta time must be finite and nonnegative")
+        if self.resources._pending_preloads:
+            with self.debug._measure('streaming'):
+                self.resources.update_preloads()
         self.flush_deferred()
+        if self._transition is not None and self._transition.game is self:
+            self._transition._step(min(dt, .25))
         self._refresh_screen_notifiers()
         if self._ui:
             self._ui.arrange()
@@ -590,9 +670,16 @@ class Game:
                     for obj in self.objects:
                         if hasattr(obj, "_camera_update") and obj.can_process():
                             obj._camera_update(dt)
+                    if self._tilemap_streams:
+                        with self.debug._measure('streaming'):
+                            for stream in tuple(self._tilemap_streams):
+                                if stream.cover_view and stream.can_process():
+                                    stream._cover_camera()
                     for obj in self.objects:
                         if hasattr(obj, "_listener_update") and obj.can_process():
                             obj._listener_update()
+                    if self._audio is not None:
+                        self._audio._update_ducking(dt)
                     for obj in self.objects:
                         if getattr(obj, "_is_audio_player", False):
                             obj._audio_update(suspended=not obj.can_process())
@@ -601,8 +688,16 @@ class Game:
 
     def _fixed_update(self, step):
         self.input._begin_physics()
+        self._interpolating_step = self.physics_interpolation and not self.paused
         try:
+            if self._interpolating_step and self._physics is not None:
+                self._physics._capture_poses()
             self._process("physics_update", step, self.physics_updated)
+            if self._tilemap_streams:
+                with self.debug._measure('streaming'):
+                    for stream in tuple(self._tilemap_streams):
+                        if stream.can_process():
+                            stream.refresh()
             for obj in self.objects:
                 if hasattr(obj, "_sync_collisions"):
                     obj._sync_collisions()
@@ -615,17 +710,23 @@ class Game:
                     self._dispatching -= 1
                 self.flush_deferred()
         finally:
+            self._interpolating_step = False
             self.input._end_physics()
 
     def draw_list(self):
         # A Canvas is one composited surface; equal orders keep registration order.
-        indices={}
-        for obj in self.objects:
-            if not getattr(obj, '_is_screen_notifier', False):
-                indices.setdefault(obj.canvas or self.world, len(indices))
-        return sorted((obj for obj in self.objects if not getattr(obj, '_is_screen_notifier', False)
-                       and obj.visible and obj not in self._removing),
-                      key=lambda obj:((obj.canvas or self.world).order,indices[obj.canvas or self.world],obj.z_index))
+        indices = {}
+        visible = []
+        for obj in self._objects:
+            if getattr(obj, '_is_screen_notifier', False):
+                continue
+            canvas = obj.canvas or self.world
+            order = indices.setdefault(canvas, len(indices))
+            if obj.visible and obj not in self._removing:
+                depth = obj.render_position.y + obj.y_sort_offset if canvas.y_sort else 0
+                visible.append(((canvas.order, order, obj.z_index, depth), obj))
+        visible.sort(key=lambda item: item[0])
+        return [obj for _, obj in visible]
 
     def _refresh_screen_notifiers(self):
         if not self._screen_notifiers:
@@ -695,7 +796,7 @@ class Game:
                     batch.flush()
                 target.view = view
                 shader = obj.material._resolve(self.resources) if obj.material is not None else None
-                states = RenderStates(transform=obj.transform, shader=shader)
+                states = RenderStates(transform=obj.render_transform, shader=shader)
                 if getattr(obj, '_is_control', False) and self._ui:
                     self._ui.draw(obj, target, states)
                 else:
@@ -722,7 +823,8 @@ class Game:
         finally:
             self.debug._counting_draws = False
         self.debug._last_draw_calls = self.debug._working_draw_calls
-        self.debug._publish_profile()
+        if target is not self.window:
+            self.debug._publish_profile()
 
     def _render_frame(self, target):
         output_size = target.size
@@ -807,13 +909,17 @@ class Game:
     def handle_event(self, event):
         self._dispatching += 1
         try:
-            if self.debug._event(event):
+            self.input._note_device(event)
+            if self.input._consume_capture_event(event):
                 if event.type == Event.KEY_RELEASED:
-                    self.input.handle_event(event, consumed=True)
+                    self.debug._event(event)
+                return True
+            if self.debug._event(event):
+                self.input._handle_event(event, consumed=True)
                 return True
             consumed = self._ui is not None and self._ui.handle_event(event)
             self.input.set_gui_captured(self._ui is not None and self._ui.keyboard_captured)
-            self.input.handle_event(event,consumed=consumed)
+            self.input._handle_event(event,consumed=consumed)
             if consumed:
                 return True
             for obj in reversed(self.draw_list()):
@@ -874,17 +980,18 @@ class Game:
         self._window = MeasuredWindow(VideoMode(*self.window_size), self.title)
         self._window._debug = self.debug
         try:
-            self.window.set_framerate_limit(self.fps_limit)
+            self._apply_frame_pacing()
             for obj in objects:
                 self.add(obj)
             clock, frames = Clock(), 0
             while self.window.is_open and self.running:
                 if max_frames is not None and frames >= max_frames:
                     break
-                for event in self.window.events:
-                    if event.type == Event.CLOSED:
-                        self.quit()
-                    self.handle_event(event)
+                with self.debug._measure('events'):
+                    for event in self.window.events:
+                        if event.type == Event.CLOSED:
+                            self.quit()
+                        self.handle_event(event)
                 if not self.running:
                     break
                 self.update(clock.restart().seconds)
@@ -892,7 +999,9 @@ class Game:
                     break
                 self.window.clear(self.clear_color)
                 self.render(self.window)
-                self.window.display()
+                with self.debug._measure('present'):
+                    self.window.display()
+                self.debug._publish_profile()
                 frames += 1
         finally:
             try:

@@ -27,6 +27,8 @@ class ProjectConfig:
     locale:str='en'
     fallback_locale:str='en'
     catalogs:dict=field(default_factory=dict)
+    physics_interpolation:bool=False
+    vsync:bool=False
     @property
     def root(self):return self.file.parent
     @property
@@ -36,7 +38,8 @@ class ProjectConfig:
                     save_dir=self.save_dir,app_id=self.app_id,window_size=self.window_size,
                     scale_mode=self.scale_mode,theme=self.theme,debug=self.debug,debug_key=self.debug_key,
                     persist_preferences=self.persist_preferences,locale=self.locale,
-                    fallback_locale=self.fallback_locale,catalogs=self.catalogs)
+                    fallback_locale=self.fallback_locale,catalogs=self.catalogs,
+                    physics_interpolation=self.physics_interpolation,vsync=self.vsync)
     @classmethod
     def load(cls,path='doku2d.toml'):
         path=Path(path).resolve()
@@ -98,10 +101,17 @@ class ProjectConfig:
             raise ValueError('window.scale_mode must be fit, integer or stretch')
         window_size=(integer(window.get('initial_width',logical_width),'window.initial_width'),
                      integer(window.get('initial_height',logical_height),'window.initial_height'))
+        physics_interpolation=window.get('physics_interpolation',False)
+        if not isinstance(physics_interpolation,bool):
+            raise ValueError('window.physics_interpolation must be boolean')
+        vsync=window.get('vsync',False)
+        if not isinstance(vsync,bool):
+            raise ValueError('window.vsync must be boolean')
         return cls(path,title,app_id,entry,assets,output,
                    logical_width,logical_height,
                    integer(window.get('fps_limit',game.get('fps',60)),'window.fps_limit',0),
                    integer(window.get('physics_fps',60),'window.physics_fps'),
                    local(storage,'storage.directory') if storage else None,window_size,scale_mode,
                    local(theme,'ui.theme') if theme else None,debug_enabled,
-                   None if debug_key is False else debug_key,persist_preferences,locale,fallback_locale,catalogs)
+                   None if debug_key is False else debug_key,persist_preferences,locale,fallback_locale,catalogs,
+                   physics_interpolation,vsync)

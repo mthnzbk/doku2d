@@ -5,7 +5,7 @@ from sfml.graphics import BLEND_NONE, Color, Shader
 from ..core import Entity,Signal
 from ..animation.values import interpolate
 from .light import color
-from .shader import draw_effect
+from .shader import draw_effect, draw_tinted_texture
 
 GROUP_SHADER=b'''
 uniform sampler2D source;
@@ -27,6 +27,7 @@ class CanvasGroup(Entity):
     def __init__(self,name=None,*,canvas=None,opacity=1,color=Color.WHITE):
         super().__init__(name)
         self._members=[];self._surface=None;self._shader=None
+        self._shader_available = None
         self._material_surface = None
         self._opacity=1.;self._color=Color.WHITE
         self.canvas=canvas;self.opacity=opacity;self.color=color
@@ -83,14 +84,18 @@ class CanvasGroup(Entity):
         if self.opacity<=0:return
         size=tuple(map(int,target.size))
         if self._surface is None or tuple(self._surface.size)!=size:self._surface=self.game.create_render_texture(size)
-        if self._shader is None:
-            if not Shader.is_available():raise RuntimeError('CanvasGroup requires OpenGL shader support')
+        if self._shader_available is None:
+            self._shader_available = Shader.is_available()
+        if self._shader_available and self._shader is None:
             self._shader=Shader.from_memory(fragment=GROUP_SHADER)
         surface=self._surface;surface.reset_GL_states();surface.clear(Color.TRANSPARENT)
         canvas=self.canvas or self.game.world
         members=sorted((obj for obj in self.members if obj.game is self.game and obj.visible and obj not in self.game._removing),key=lambda obj:obj.z_index)
         self.game._draw_canvas_objects(surface,members,canvas,batch_owner=self)
         surface.display()
+        if self._shader is None:
+            draw_tinted_texture(self.game, target, surface.texture, self.color, self.opacity)
+            return
         self._shader.set_uniform('source',surface.texture);self._shader.set_uniform('tint',self.color)
         self._shader.set_uniform('opacity',self.opacity)
         if states.shader is None:
