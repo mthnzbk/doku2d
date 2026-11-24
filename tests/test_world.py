@@ -18,7 +18,7 @@ from doku2d import (Entity, Game, Canvas, Camera, AudioListener, AudioPlayer,
 class TiledTests(unittest.TestCase):
     def setUp(self):
         self.tmp = TemporaryDirectory()
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name).resolve()
     def tearDown(self): self.tmp.cleanup()
     def write(self,name,data):
         path = self.root/name

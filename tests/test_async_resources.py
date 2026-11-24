@@ -10,7 +10,7 @@ from doku2d import Game
 class AsyncResourceTests(TestCase):
     def test_ready_assets_apply_to_the_existing_cache_with_a_frame_budget(self):
         with TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             Image.from_size(4, 4, Color.WHITE).to_file(str(root/'tile.png'))
             (root/'data.json').write_text('{"level": 1}', encoding='utf-8')
             game = Game(asset_root=root)
@@ -42,7 +42,7 @@ class AsyncResourceTests(TestCase):
 
     def test_unload_retires_in_flight_work_without_repopulating_the_cache(self):
         with TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             (root/'item.txt').write_text('old', encoding='utf-8')
             game = Game(asset_root=root)
             self.addCleanup(game.close)

@@ -87,7 +87,7 @@ class MotorWorkflowTests(TestCase):
 
     def test_transition_waits_for_preparation_and_replaces_only_the_selected_scope(self):
         with TemporaryDirectory() as directory:
-            path = Path(directory)
+            path = Path(directory).resolve()
             (path/'data.txt').write_text('ready')
             game = Game(asset_root=path)
             self.addCleanup(game.close)
