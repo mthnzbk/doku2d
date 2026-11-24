@@ -70,12 +70,12 @@ print('Installed engine:', doku2d.__version__, doku2d.__file__)
     with (project/'doku2d.toml').open('a', encoding='utf-8') as config:
         config.write('\n[storage]\ndirectory = ".release-saves"\n')
     run([cli, 'run', '--project', project, '--frames', '3'])
-    run([python, '-I', ROOT/'tools'/'check_starter.py', project])
+    run([python, '-I', '-X', 'faulthandler', ROOT/'tools'/'check_starter.py', project])
     if args.tests:
         ignore = shutil.ignore_patterns('__pycache__', '*.pyc', 'dist', '.user-data')
         shutil.copytree(ROOT/'tests', run_dir/'tests', ignore=ignore)
         shutil.copytree(ROOT/'examples', run_dir/'examples', ignore=ignore)
-        run([python, '-I', '-c', '''
+        run([python, '-I', '-X', 'faulthandler', '-c', '''
 from pathlib import Path
 import sys
 import unittest

@@ -1,6 +1,7 @@
 """Regression checks for scopes, fixed resolution, themes, tile meshes and builds."""
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from time import monotonic, sleep
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
@@ -112,16 +113,26 @@ class EngineFeatures(TestCase):
         for size in ((320, 220), (160, 90), (320, 110)):
             with self.subTest(size=size):
                 window.size = size
-                for _ in window.events:
-                    pass
-                window.clear(game.clear_color)
-                game.render(window)
-                pixels = Texture.create(*window.size)
-                pixels.update_from_window(window)
-                image = pixels.to_image()
-                window.display()
-                marker_pixel = tuple(map(round, game.screen_to_window((134, 58))))
-                world_pixel = tuple(map(round, game.screen_to_window((90, 45))))
+                deadline = monotonic()+2
+                image = None
+                # A resize can leave the old back buffer in place until the
+                # window system has processed the new size and swapped a frame.
+                while monotonic() < deadline:
+                    for _ in window.events:
+                        pass
+                    if tuple(window.size) == size:
+                        window.clear(game.clear_color)
+                        game.render(window)
+                        pixels = Texture.create(*size)
+                        pixels.update_from_window(window)
+                        image = pixels.to_image()
+                        window.display()
+                        marker_pixel = tuple(map(round, game.screen_to_window((134, 58))))
+                        world_pixel = tuple(map(round, game.screen_to_window((90, 45))))
+                        if image[marker_pixel] == Color.RED and image[world_pixel] == Color(80, 80, 80):
+                            break
+                    sleep(.01)
+                self.assertIsNotNone(image, f'Window resize to {size} did not arrive')
                 self.assertEqual(image[marker_pixel], Color.RED)
                 self.assertEqual(image[world_pixel], Color(80, 80, 80))
                 if size != (160, 90):
