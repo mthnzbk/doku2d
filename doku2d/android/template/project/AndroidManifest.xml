@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+    <!-- Uncomment if your game needs internet access.
+    <uses-permission android:name="android.permission.INTERNET" />
+    -->
+
+    <!-- Use the app_name resource if you want to localize the launcher label.
+    <application android:label="@string/app_name" tools:replace="android:label" />
+    -->
+</manifest>

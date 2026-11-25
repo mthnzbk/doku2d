@@ -183,10 +183,27 @@ class ProjectWorkTests(unittest.TestCase):
     def test_create_and_run_starter(self):
         with TemporaryDirectory(dir=WORKSPACE, prefix='.project-flow-') as directory:
             project = create_project(Path(directory) / 'starter')
+            config = ProjectConfig.load(project)
+            self.assertEqual(config.window_icon, project / 'assets/icon.png')
+            self.assertEqual(config.build_icon, project / 'assets/icon.ico')
+            self.assertEqual(tuple(Image.from_file(str(config.window_icon)).size), (64, 64))
+            self.assertEqual(config.build_icon.read_bytes()[:6], b'\x00\x00\x01\x00\x05\x00')
             with (project / 'doku2d.toml').open('a', encoding='utf-8') as stream:
                 stream.write('\n[storage]\ndirectory=".user-data"\n')
             self.assertEqual(run_project(project, arguments=['--frames', '2']), 0)
             self.assertTrue((project / '.user-data/settings.json').exists())
+
+    def test_game_applies_default_and_custom_icons_on_window_creation(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'custom.png'
+            Image.from_size(12, 10, Color.RED).to_file(str(path))
+            for options, expected in (({}, (64, 64)), ({'window_icon': path}, (12, 10))):
+                with self.subTest(options=options):
+                    game = Game(**options)
+                    with patch('doku2d.rendering.targets.MeasuredWindow') as create:
+                        game.run(max_frames=0)
+                    icon = Image.from_file(str(game.window_icon))
+                    create.return_value.set_icon.assert_called_once_with(*expected, bytes(icon.pixels))
 
     def test_vsync_uses_display_pacing_and_restores_the_software_limit(self):
         with TemporaryDirectory() as directory:
@@ -227,6 +244,14 @@ class ProjectWorkTests(unittest.TestCase):
             self.assertEqual(config.game_options['project_root'],project)
             command=standalone_command(config)
             self.assertIn('--standalone',command);self.assertIn('--include-package-data=doku2d',command)
+            if os.name == 'nt':
+                self.assertIn(f'--windows-icon-from-ico={config.build_icon}', command)
+            custom = project / 'custom.png'
+            custom.write_bytes(config.window_icon.read_bytes())
+            path = config.file
+            contents = path.read_text(encoding='utf-8').replace('assets/icon.png','custom.png')
+            path.write_text(contents,encoding='utf-8')
+            self.assertIn(f'--include-data-files={custom}=custom.png', standalone_command(ProjectConfig.load(path)))
             with self.assertRaises(FileExistsError):create_project(project)
             path=project/'doku2d.toml';path.write_text(path.read_text(encoding='utf-8').replace('entry = "main.py"','entry = "../outside.py"'),encoding='utf-8')
             with self.assertRaises(ValueError):ProjectConfig.load(project)

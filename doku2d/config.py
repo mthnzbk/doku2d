@@ -29,6 +29,8 @@ class ProjectConfig:
     catalogs:dict=field(default_factory=dict)
     physics_interpolation:bool=False
     vsync:bool=False
+    window_icon:Path|None=None
+    build_icon:Path|None=None
     @property
     def root(self):return self.file.parent
     @property
@@ -39,7 +41,8 @@ class ProjectConfig:
                     scale_mode=self.scale_mode,theme=self.theme,debug=self.debug,debug_key=self.debug_key,
                     persist_preferences=self.persist_preferences,locale=self.locale,
                     fallback_locale=self.fallback_locale,catalogs=self.catalogs,
-                    physics_interpolation=self.physics_interpolation,vsync=self.vsync)
+                    physics_interpolation=self.physics_interpolation,vsync=self.vsync,
+                    window_icon=self.window_icon)
     @classmethod
     def load(cls,path='doku2d.toml'):
         path=Path(path).resolve()
@@ -107,6 +110,17 @@ class ProjectConfig:
         vsync=window.get('vsync',False)
         if not isinstance(vsync,bool):
             raise ValueError('window.vsync must be boolean')
+        def icon(section, label):
+            value = section.get('icon')
+            if value is None:
+                return None
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f'{label} must be a nonempty path')
+            return local(value, label)
+        window_icon = icon(window, 'window.icon')
+        build_icon = icon(build, 'build.icon')
+        if build_icon is not None and build_icon.suffix.lower() != '.ico':
+            raise ValueError('build.icon must be an ICO file')
         return cls(path,title,app_id,entry,assets,output,
                    logical_width,logical_height,
                    integer(window.get('fps_limit',game.get('fps',60)),'window.fps_limit',0),
@@ -114,4 +128,4 @@ class ProjectConfig:
                    local(storage,'storage.directory') if storage else None,window_size,scale_mode,
                    local(theme,'ui.theme') if theme else None,debug_enabled,
                    None if debug_key is False else debug_key,persist_preferences,locale,fallback_locale,catalogs,
-                   physics_interpolation,vsync)
+                   physics_interpolation,vsync,window_icon,build_icon)

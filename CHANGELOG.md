@@ -1,5 +1,19 @@
 # Sürüm notları
 
+## 1.0.0rc3
+
+- `doku2d build android` ARM64 telefonlar ve x86-64 emülatörler için
+  APK paketi oluşturuyor. Bağımsız derleme betiği Windows’ta WSL2’yi,
+  x86-64 Linux’ta yerel araçları ve macOS’ta Docker’ı kullanıyor.
+- Android derlemesi proje içinde düzenlenebilir manifest ve kaynak
+  dosyaları oluşturuyor. Sonraki derlemeler bu değişiklikleri kullanıyor.
+- `doku2d run android` cihazı seçip APK’yı kuruyor, oyunu açıyor ve
+  uygulama günlüklerini terminale aktarıyor.
+- `LineEdit` ve `TextEdit` Android sistem klavyesini kullanıyor.
+  Klavye açıkken oyun görüntüsü kalan alana sığıyor.
+- Yeni projeler varsayılan Doku2D pencere ve uygulama ikonuyla geliyor.
+  Projeye özel pencere ikonu ve Windows uygulama ikonu destekleniyor.
+
 ## 1.0.0rc2
 
 - Diyalog dosyaları, koşullu ve süreli seçimler, oyuncu girişi, ortak alt

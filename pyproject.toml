@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "doku2d"
-version = "1.0.0rc2"
+version = "1.0.0rc3"
 description = "Python için kod odaklı 2D oyun framework'ü"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,4 +31,5 @@ where = ["."]
 include = ["doku2d", "doku2d.*"]
 
 [tool.setuptools.package-data]
-doku2d = ["assets/LICENSE", "assets/fonts/*", "cli/template/*", "cli/template/.gitignore", "cli/template/assets/*"]
+doku2d = ["assets/LICENSE", "assets/fonts/*", "assets/icon.png", "assets/icon.ico", "cli/template/*", "cli/template/.gitignore", "cli/template/assets/*"]
+"doku2d.android" = ["template/*", "template/scripts/*", "template/native/*", "template/app/*", "template/app/src/main/*.xml", "template/app/src/main/java/org/kora2d/pysfmldemo/*.java", "template/project/*.xml", "template/project/res/values/*.xml"]

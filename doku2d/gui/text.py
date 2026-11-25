@@ -367,6 +367,30 @@ class _Editor(Control):
             if value: self._replace_selection(value)
         return True
 
+    def _apply_android_edit(self, text, anchor, cursor):
+        # Keep the normal selection replacement path so limits, change signals
+        # and undo also apply to edits made by the Android keyboard.
+        previous = self.text
+        if text != previous:
+            undo_state = (previous, self._cursor, self._selection_anchor)
+            start = 0
+            limit = min(len(text), len(previous))
+            while start < limit and text[start] == previous[start]:
+                start += 1
+            tail = 0
+            while tail < limit - start and text[-tail-1] == previous[-tail-1]:
+                tail += 1
+            undo_count = len(self._undo)
+            self._selection_anchor, self._cursor = start, len(previous) - tail
+            self._replace_selection(text[start:len(text) - tail])
+            if len(self._undo) > undo_count:
+                self._undo[undo_count] = undo_state
+        anchor = min(len(self.text), max(0, anchor))
+        cursor = min(len(self.text), max(0, cursor))
+        if (self._selection_anchor, self._cursor) != (anchor, cursor):
+            self._selection_anchor = anchor
+            self._move_cursor(cursor, selecting=True)
+
     def _key(self, event):
         if event.type != Event.KEY_PRESSED: return False
         key, shift, ctrl = event.code, event.shift, event.control

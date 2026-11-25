@@ -1,0 +1,34 @@
+{
+  "python.tar.xz": {
+    "url": "https://www.python.org/ftp/python/3.13.9/Python-3.13.9.tar.xz",
+    "sha256": "ed5ef34cda36cfa2f3a340f07cac7e7814f91c7f3c411f6d3562323a866c5c66"
+  },
+  "sfml.zip": {
+    "url": "https://github.com/SFML/SFML/archive/refs/tags/3.0.2.zip",
+    "sha256": "3c8467414cf634c32419973b22faefcb8b30002f908b77fb658692e9a580a907"
+  },
+  "pysfml.zip": {
+    "url": "https://github.com/intjelic/python-sfml/archive/refs/tags/v3.0.2.0.zip",
+    "sha256": "9605070edc5a7bc1c8e7296630d07186bafee8628a8e2048010e704bfa9acd3a"
+  },
+  "ndk-linux.zip": {
+    "url": "https://dl.google.com/android/repository/android-ndk-r28c-linux.zip",
+    "sha256": "dfb20d396df28ca02a8c708314b814a4d961dc9074f9a161932746f815aa552f"
+  },
+  "sdk-tools-linux.zip": {
+    "url": "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip",
+    "sha256": "7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee"
+  },
+  "gradle.zip": {
+    "url": "https://services.gradle.org/distributions/gradle-8.11.1-bin.zip",
+    "sha256": "f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6"
+  },
+  "pymunk-7.3.1.tar.gz": {
+    "sha256": "d36f10ac78355b5f4798d5b17e32100a1a1230258b1f37008f778ece72ddb719",
+    "url": "https://files.pythonhosted.org/packages/29/47/6e510f1e6809efdf6f0cc55f4f0cf13a8a4d0b3c093198a10ef6dbecf554/pymunk-7.3.1.tar.gz"
+  },
+  "cffi-2.0.0.tar.gz": {
+    "sha256": "44d1b5909021139fe36001ae048dbdde8214afa20200eda0f64c068cac5d5529",
+    "url": "https://files.pythonhosted.org/packages/eb/56/b1ba7935a17738ae8453301356628e8147c79dbb825bcbc73dc7401f9846/cffi-2.0.0.tar.gz"
+  }
+}

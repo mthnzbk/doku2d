@@ -31,6 +31,8 @@ def create_project(destination):
             target.write_text(text,encoding='utf-8')
         else:shutil.copyfile(source,target)
     (root/'assets').mkdir(exist_ok=True)
+    for filename in ('icon.png', 'icon.ico'):
+        shutil.copyfile(ENGINE/'assets'/filename, root/'assets'/filename)
     (root/'assets'/'.gitkeep').touch()
     return root
 
@@ -65,17 +67,22 @@ def standalone_command(config, *, output_dir=None):
     if config.assets.is_dir():
         relative = config.assets.relative_to(config.root).as_posix()
         command.append(f'--include-data-dir={config.assets}={relative}')
+    data_files = {}
+    if config.window_icon is not None:
+        data_files[config.window_icon] = 'window icon'
     if config.theme is not None:
         theme = Theme.load(config.theme)
-        data_files = [config.theme]
+        data_files[config.theme] = 'theme'
         if isinstance(theme.font, Path):
-            data_files.append(theme.font.resolve())
-        for path in data_files:
-            if not path.is_relative_to(config.root):
-                raise ValueError(f'Standalone theme data must be inside the project: {path}')
-            if not path.is_relative_to(config.assets):
-                relative = path.relative_to(config.root).as_posix()
-                command.append(f'--include-data-files={path}={relative}')
+            data_files[theme.font.resolve()] = 'theme font'
+    for path, kind in data_files.items():
+        if not path.is_relative_to(config.root):
+            raise ValueError(f'Standalone {kind} must be inside the project: {path}')
+        if not path.is_relative_to(config.assets):
+            relative = path.relative_to(config.root).as_posix()
+            command.append(f'--include-data-files={path}={relative}')
+    if os.name == 'nt':
+        command.append(f'--windows-icon-from-ico={config.build_icon or ENGINE / "assets" / "icon.ico"}')
     if os.environ.get('DOKU2D_BUILD_DOWNLOAD_TOOLS') == '1':
         command.append('--assume-yes-for-downloads')
     command.append(str(config.entry))
@@ -167,9 +174,15 @@ def main(argv=None):
     parser=argparse.ArgumentParser(prog='doku2d', description='Doku2D project tools')
     commands=parser.add_subparsers(dest='command',required=True)
     create=commands.add_parser('create',help='Create a playable starter project');create.add_argument('directory')
-    run=commands.add_parser('run',help='Run a project');run.add_argument('--project',default='.');run.add_argument('--frames',type=int)
-    build = commands.add_parser('build', help='Compile a standalone application with Nuitka')
+    run = commands.add_parser('run', help='Run a project on desktop or Android')
+    run.add_argument('target', nargs='?', choices=('android',))
+    run.add_argument('--project', default='.')
+    run.add_argument('--frames', type=int)
+    run.add_argument('--device', help='Android device serial')
+    build = commands.add_parser('build', help='Build a desktop application or an Android APK')
+    build.add_argument('target', nargs='?', choices=('android',))
     build.add_argument('--project', default='.')
+    build.add_argument('--abi', choices=('arm64-v8a', 'x86_64'), help='Android processor architecture')
     atlas = commands.add_parser('atlas', help='Pack PNG files into a sprite atlas')
     atlas.add_argument('directory')
     atlas.add_argument('--output')
@@ -178,10 +191,25 @@ def main(argv=None):
     args=parser.parse_args(argv)
     try:
         if args.command=='create':print(create_project(args.directory));return 0
-        if args.command=='run':return run_project(args.project,arguments=['--frames',str(args.frames)] if args.frames is not None else [])
+        if args.command == 'run':
+            if args.target == 'android':
+                if args.frames is not None:
+                    run.error('--frames is available on desktop')
+                from ..android.run_android import run_android
+                return run_android(args.project, device=args.device)
+            if args.device is not None:
+                run.error('--device requires the android target')
+            return run_project(args.project, arguments=['--frames', str(args.frames)]
+                               if args.frames is not None else [])
         if args.command == 'atlas':
             print(build_atlas(args.directory, args.output, max_size=args.max_size, padding=args.padding))
             return 0
+        if args.target == 'android':
+            from ..android.build_android import build_android
+            print(build_android(args.project, args.abi or 'arm64-v8a'))
+            return 0
+        if args.abi:
+            build.error('--abi requires the android target')
         print(build_project(args.project))
         return 0
     except (OSError,ValueError,RuntimeError,subprocess.CalledProcessError) as error:

@@ -5,7 +5,7 @@ from itertools import chain
 from math import sin,cos,pi,sqrt,exp,hypot,isfinite,radians
 from pathlib import Path
 from random import Random
-from sfml.graphics import (Color, Image, Texture, Sprite, CircleShape, RenderStates, RenderTexture,
+from sfml.graphics import (Color, Image, Texture, Sprite, CircleShape, RenderStates,
                            BLEND_ADD, BLEND_ALPHA, PrimitiveType, Vertex, VertexArray)
 from sfml.system import Vector2
 from ..core import Entity,Signal
@@ -15,12 +15,18 @@ from .culling import ViewCuller
 
 @lru_cache(maxsize=1)
 def _particle_mask():
-    # Bake the same 12-sided outline once instead of tessellating it per particle.
-    surface = RenderTexture(64, 64)
-    surface.clear(Color(255, 255, 255, 0))
-    surface.draw(CircleShape(32, 12))
-    surface.display()
-    texture = Texture.from_image(surface.texture.to_image())
+    # Bake the 12-sided outline once without a GPU readback. Some Android
+    # OpenGL ES drivers can draw textures but cannot read them back.
+    radius, sides = 32, 12
+    angles = [(index + .5) * 2 * pi / sides - pi / 2 for index in range(sides)]
+    normals = [(cos(angle), sin(angle)) for angle in angles]
+    edge = radius * cos(pi / sides)
+    image = Image.create(radius * 2, radius * 2, Color(255, 255, 255, 0))
+    for y in range(radius * 2):
+        for x in range(radius * 2):
+            if all((x + .5 - radius) * dx + (y + .5 - radius) * dy <= edge for dx, dy in normals):
+                image[x, y] = Color.WHITE
+    texture = Texture.from_image(image)
     texture.smooth = True
     return texture
 

@@ -3,8 +3,10 @@ from weakref import WeakKeyDictionary
 from pathlib import Path
 from contextlib import contextmanager
 import re
+import os
+import sys
 from math import isfinite
-from sfml.graphics import Color, Rect, RenderStates, Sprite, View
+from sfml.graphics import Color, Image, Rect, RenderStates, Sprite, View
 from sfml.system import Clock, Vector2
 from sfml.window import Event, VideoMode
 from .canvas import Canvas
@@ -31,7 +33,7 @@ class Game:
                  save_dir=None, app_id=None, window_size=None, scale_mode="fit",
                  bar_color=Color.BLACK, theme=None, debug=False, debug_key=Key.F3,
                  persist_preferences=False, locale="en", fallback_locale="en", catalogs=None,
-                 physics_interpolation=False, vsync=False):
+                 physics_interpolation=False, vsync=False, window_icon=None):
         self._window = None
         self._closed = False
         self._running = True
@@ -69,8 +71,18 @@ class Game:
         self._world = Canvas()
         self._project_root=Path(project_root or Path.cwd()).resolve()
         self._resources=Resources(self._project_root/Path(asset_root or '.'))
+        self.window_icon = (Path(__file__).resolve().parents[1] / 'assets' / 'icon.png'
+                            if window_icon is None else self.resources.resolve(window_icon))
         self._app_id=app_id or re.sub(r'[^A-Za-z0-9_.-]+','-',str(title)).strip('.-') or 'doku2d-game'
-        self._saves=SaveStore(self._project_root/Path(save_dir) if save_dir is not None else None,app_id=self._app_id)
+        # APK updates replace the packaged game tree. Keep saves beside it.
+        android_saves = os.environ.get("DOKU2D_ANDROID_SAVE_DIR") if sys.platform == "android" else None
+        save_path = self._project_root / Path(save_dir) if save_dir is not None else None
+        if android_saves:
+            save_path = Path(android_saves) / (Path(save_dir) if save_dir is not None
+                                              and not Path(save_dir).is_absolute() else "")
+            if not save_path.resolve().is_relative_to(Path(android_saves).resolve()):
+                save_path = Path(android_saves)
+        self._saves = SaveStore(save_path, app_id=self._app_id)
         self._settings=None
         self._persist_preferences = bool(persist_preferences)
         if self._persist_preferences:
@@ -189,6 +201,10 @@ class Game:
     def content_rect(self, output_size=None):
         """Presentation rectangle in physical pixels: x, y, width, height."""
         width, height = self.window_size if output_size is None else output_size
+        if output_size is None and self._ui is not None:
+            keyboard = self._ui._android_keyboard
+            if keyboard is not None and keyboard.viewport_height:
+                height = min(height, keyboard.viewport_height)
         if width <= 0 or height <= 0:
             return (0, 0, 0, 0)
         if self.scale_mode == "stretch":
@@ -648,6 +664,7 @@ class Game:
         self._refresh_screen_notifiers()
         if self._ui:
             self._ui.arrange()
+            self._ui._update_android_keyboard()
         self.input.set_gui_captured(self._ui is not None and self._ui.keyboard_captured)
         if self.debug.enabled:
             self.debug._sample(dt)
@@ -828,10 +845,10 @@ class Game:
 
     def _render_frame(self, target):
         output_size = target.size
-        if tuple(output_size) == tuple(self.size):
+        x, y, w, h = self.content_rect(None if target is self.window else output_size)
+        if tuple(output_size) == tuple(self.size) and (x, y, w, h) == (0, 0, *self.size):
             self._render_content(target)
             return
-        x, y, w, h = self.content_rect(output_size)
         if not w or not h:
             return
         if self._surface is None or tuple(self._surface.size) != tuple(self.size):
@@ -980,6 +997,10 @@ class Game:
         self._window = MeasuredWindow(VideoMode(*self.window_size), self.title)
         self._window._debug = self.debug
         try:
+            # Android gets its launcher icon directly from the APK resources.
+            if sys.platform != "android":
+                icon = Image.from_file(str(self.resources.resolve(self.window_icon)))
+                self.window.set_icon(int(icon.width), int(icon.height), bytes(icon.pixels))
             self._apply_frame_pacing()
             for obj in objects:
                 self.add(obj)

@@ -237,6 +237,8 @@ MEMBER_SUMMARIES.update({
     'title': 'Pencere veya sekmede gösterilen başlıktır.',
     'window': 'Etkin SFML penceresini verir.',
     'window_size': 'Pencerenin piksel cinsinden boyutudur.',
+    'window_icon': 'Pencere açıldığında yüklenen simge dosyasının yoludur.',
+    'build_icon': 'Windows derlemesinin ICO simge dosyasının yoludur.',
     'world': 'Oyunun varsayılan dünya Canvas’ıdır.',
     'action_press': 'Eyleme programatik basış ve güç değeri gönderir.',
     'action_release': 'Programatik basışı ilgili kaynak için kaldırır.',

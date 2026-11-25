@@ -1,5 +1,7 @@
 # Doku2D
 
+![Doku2D simgesi](doku2d/assets/icon.png)
+
 Python ile kod odaklı 2D oyun framework'ü. Nesneler `Game` içine kaydolur,
 bölüm geçişleri `Scope` ile, çizim katmanları `Canvas` ile yönetilir.
 

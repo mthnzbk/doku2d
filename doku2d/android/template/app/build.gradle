@@ -1,0 +1,26 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'org.kora2d.pysfmldemo'
+    compileSdk 35
+    defaultConfig {
+        applicationId project.property('appId')
+        minSdk 24
+        targetSdk 35
+        versionCode project.property('appVersionCode').toInteger()
+        versionName project.property('appVersionName')
+        manifestPlaceholders = [appLabel: project.property('appLabel'),
+                                screenOrientation: project.property('screenOrientation')]
+        ndk { abiFilters(project.findProperty('targetAbi') ?: 'arm64-v8a') }
+    }
+    buildTypes {
+        debug { debuggable true }
+        release { minifyEnabled false }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    // The embedded interpreter needs a real nativeLibraryDir on disk.
+    packaging { jniLibs { useLegacyPackaging true } }
+}

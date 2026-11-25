@@ -8,9 +8,11 @@ width = 960
 height = 640
 fps_limit = 60
 physics_fps = 60
+icon = "assets/icon.png"
 
 [assets]
 directory = "assets"
 
 [build]
 directory = "dist"
+icon = "assets/icon.ico"

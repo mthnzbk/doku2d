@@ -1,1 +1,2 @@
 Scripts/doku2d text eol=lf
+doku2d/android/template/scripts/*.sh text eol=lf

@@ -1,4 +1,5 @@
 from dataclasses import replace
+import sys
 from sfml.graphics import Rect
 from sfml.window import Event, Keyboard
 from ..core import Canvas
@@ -29,6 +30,16 @@ class UI:
         self._actions = {}
         self._down_pointers = set()
         self.drag_drop = _DragDrop(self)
+        self._android_keyboard = None
+        if sys.platform == "android":
+            try:
+                import _android_bridge
+            except ImportError:
+                pass
+            else:
+                if hasattr(_android_bridge, "configure_keyboard"):
+                    from .android_keyboard import AndroidKeyboard
+                    self._android_keyboard = AndroidKeyboard(_android_bridge)
 
     @property
     def theme(self):
@@ -105,6 +116,10 @@ class UI:
         return next((obj for obj in reversed(self.controls())
                      if obj.mouse_filter != "ignore" and obj.contains(position)), None)
 
+    def _update_android_keyboard(self):
+        if self._android_keyboard is not None:
+            self._android_keyboard.update(self)
+
     def handle_event(self, event):
         self.arrange()
         if event.type == Event.LOST_FOCUS:
@@ -164,6 +179,10 @@ class UI:
                         hover.hovered = True
                         hover.mouse_entered.emit()
             if down:
+                # Android Back may hide the keyboard while the field retains
+                # focus. A fresh tap on that field should open it again.
+                if touch and target is self.focus and self._android_keyboard is not None:
+                    self._android_keyboard.reopen = True
                 self.set_focus(target if target and target.focusable else None)
             if target is None:
                 return False
