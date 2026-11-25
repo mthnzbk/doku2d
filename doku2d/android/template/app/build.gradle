@@ -1,7 +1,7 @@
 plugins { id 'com.android.application' }
 
 android {
-    namespace 'org.kora2d.pysfmldemo'
+    namespace 'org.doku2d.pysfmldemo'
     compileSdk 35
     defaultConfig {
         applicationId project.property('appId')

@@ -32,4 +32,4 @@ include = ["doku2d", "doku2d.*"]
 
 [tool.setuptools.package-data]
 doku2d = ["assets/LICENSE", "assets/fonts/*", "assets/icon.png", "assets/icon.ico", "cli/template/*", "cli/template/.gitignore", "cli/template/assets/*"]
-"doku2d.android" = ["template/*", "template/scripts/*", "template/native/*", "template/app/*", "template/app/src/main/*.xml", "template/app/src/main/java/org/kora2d/pysfmldemo/*.java", "template/project/*.xml", "template/project/res/values/*.xml"]
+"doku2d.android" = ["template/*", "template/scripts/*", "template/native/*", "template/app/*", "template/app/src/main/*.xml", "template/app/src/main/java/org/doku2d/pysfmldemo/*.java", "template/project/*.xml", "template/project/res/values/*.xml"]

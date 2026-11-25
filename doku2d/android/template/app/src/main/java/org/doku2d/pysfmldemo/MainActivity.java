@@ -1,4 +1,4 @@
-package org.kora2d.pysfmldemo;
+package org.doku2d.pysfmldemo;
 
 import android.app.NativeActivity;
 import android.os.Bundle;
